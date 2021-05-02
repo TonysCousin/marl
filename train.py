@@ -7,10 +7,12 @@ import time
 from collections    import deque
 
 from agent_type     import AgentType
+from agent_mgr      import AgentMgr
 
 AVG_SCORE_EXTENT = 100 # number of episodes over which running average scores are computed
 CHECKPOINT_PATH = "checkpoint/" # can be empty string, but if a dir is named, needs trailing '/'
 ABORT_EPISODE = 400 # num episodes after which training will abort if insignificant learning is detected
+PRIME_FEEDBACK_INTERVAL = 4000 # num time steps between visual feedback of priming progress
 
 
 """Trains a set of DRL agents in a Unity ML-Agents environment.
@@ -32,46 +34,15 @@ def train(mgr               : AgentMgr,        # manages all agents and their le
           chkpt_interval    : int    = 100     # num episodes between checkpoints being stored
          ):
 
-"""
-JOHN TODO:
-- Store states and actions here as a tuple with a [n, x] ndarray for each agent type. I don't
-think we want all states/actions in a single array/tensor, since it requres zero padding.
-- Future: Have AgentMgr manage the env also so that train() never has to see it?
-If so, we can remove all brain references here.
-"""
+    #TODO Future: Have AgentMgr manage the env also so that train() never has to see it?
 
     # Initialize Unity simulation environment
-    agent_types = {}
     states = {}
     actions = {}
-    next_states = {}
     rewards = {}
     dones = {}
-    for n in env.brain_names:
 
-        # store the type info
-        b = env.brains[n]
-        info = env.reset(train_mode=True)[n]
-        s = len(info.vector_observations[0])
-        a = b.vector_action_space_size
-        num_agents = len(info.agents)
-        type = AgentType(n,b, s, a, num_agents)
-        agent_types[n] = type
-
-        # store initial states and define empty structures for the other performance variables of this type
-        states[n] = info.vector_observations # gets the initial states for these agents
-        actions[n] = np.ndarray((num_agents, a))
-        next_states[n] = np.ndarray((num_agents, s))
-        rewards[n] = []
-        dones[n] = []
-
-
-
-#...STOPPED WORKING HERE
-
-
-
-    # collect raw & running avg scores at each episode
+    # set up to collect raw & running avg scores at each episode
     scores = []
     avg_scores = []
     sum_steps = 0 #accumulates number of time steps exercised
@@ -79,41 +50,42 @@ If so, we can remove all brain references here.
     recent_scores = deque(maxlen=AVG_SCORE_EXTENT)
     start_time = 0
 
-    # run the simulation several time steps to prime the replay buffer
+    # run the simulation for several time steps to prime the replay buffer
     print("Priming the replay buffer", end="")
     pc = 0
+    env_info = env.reset(train_mode=True)
+    states = all_agent_states(env_info, agent_types) #initial state vectors after env reset
     while not mgr.is_learning_underway():
-        states, actions, rewards, next_states, dones = \
-          advance_time_step(mgr, env, states, actions, rewards, next_states, dones)
-        if pc % 4000 == 0:
+        states, rewards, dones = advance_time_step(mgr, env, agent_types, states)
+        if pc % PRIME_FEEDBACK_INTERVAL == 0:
             print(".", end="")
         pc += 1
-        if any(dones):
+        if any_dones(agent_types, dones): # if episode ends just keep going
             env_info = env.reset(train_mode=True)
-            states = env_info.vector_observations #returns ndarray(2, state_size)
+            states = all_agent_states(env_info, agent_types)
     print("!\n")
-
 
     # loop on episodes for training
     start_time = time.perf_counter()
-    for e in range(starting_episode, max_episodes):
+    for ep in range(starting_episode, max_episodes):
         
         # Reset the enviroment & agents and get their initial states
         env_info = env.reset(train_mode=True)
-        states = env_info.vector_observations #returns ndarray(2, state_size)
-        score = 0 #total score for this episode
+        states = all_agent_states(env_info, agent_types)
         mgr.reset()
+        score = 0 # total score for this episode
 
         # loop over time steps
         for i in range(max_time_steps):
 
             # advance the MADDPG model and its environment by one time step
-            states, actions, rewards, next_states, dones = \
-              advance_time_step(mgr, env, states, actions, rewards, next_states, dones)
+            states, rewards, dones = advance_time_step(mgr, env, agent_types, states)
 
-            # check for episode completion
-            score += np.max(rewards) #use the highest reward from all agents
-            if np.any(dones):
+            # add this step's reward to the episode score
+            score += max_rewards(agent_types, rewards)
+
+            # if the episode is complete, update the record time steps in an episode and stop the time step loop
+            if any_dones(agent_types, dones):
                 sum_steps += i
                 if i > max_steps_experienced:
                     max_steps_experienced = i
@@ -123,13 +95,13 @@ If so, we can remove all brain references here.
         current_time = time.perf_counter()
         rem_time = 0.0
         if start_time > 0:
-            timed_episodes = e - starting_episode + 1
-            avg_duration = (current_time - start_time) / timed_episodes / 60.0 #minutes
-            remaining_time_minutes = (starting_episode + max_episodes - e - 1) * avg_duration
-            rem_time = remaining_time_minutes / 60.0
+            timed_episodes = ep - starting_episode + 1
+            avg_duration = (current_time - start_time) / timed_episodes / 60.0 # minutes
+            remaining_time_minutes = (starting_episode + max_episodes - ep - 1) * avg_duration
+            rem_time = remaining_time_minutes / 60.0 # hours
             time_est_msg = "{:4.1f} hr rem".format(rem_time)
         else:
-            avg_duration = 1.0 #avoids divide-by-zero
+            avg_duration = 1.0 # avoids divide-by-zero
             time_est_msg = "???"
 
         # update score bookkeeping, report status
@@ -138,7 +110,7 @@ If so, we can remove all brain references here.
         # don't compute avg score until several episodes have completed to avoid a meaningless
         # spike in the average near the very beginning
         avg_score = 0.0
-        if e > 50:
+        if ep > 50:
             avg_score = np.mean(recent_scores)
         max_recent = np.max(recent_scores)
         avg_scores.append(avg_score)
@@ -147,67 +119,136 @@ If so, we can remove all brain references here.
         if mem_stats[0] > 0:
             mem_pct = min(100.0*float(mem_stats[1])/mem_stats[0], 99.9)
         print("\r{}\tRunning avg/max: {:.3f}/{:.3f},  mem: {:6d}/{:6d} ({:4.1f}%), avg {:.1f} eps/min   "
-              .format(e, avg_score, max_recent, mem_stats[0], mem_stats[1], mem_pct, 
-                      1.0/avg_duration), end="")
-        if e > 0  and  e % chkpt_interval == 0:
-            mgr.save_checkpoint(CHECKPOINT_PATH, run_name, e)
+              .format(ep, avg_score, max_recent, mem_stats[0], mem_stats[1], mem_pct, 1.0/avg_duration), end="")
+        
+        # save a checkpoint at planned intervals and print summary performance stats
+        if ep > 0  and  ep % chkpt_interval == 0:
+            mgr.save_checkpoint(CHECKPOINT_PATH, run_name, ep)
             print("\r{}\tAverage score:   {:.3f},        mem: {:6d}/{:6d} ({:4.1f}%), avg {:.1f} eps/min; {}   "
-                  .format(e, avg_score, mem_stats[0], mem_stats[1], mem_pct,
-                          1.0/avg_duration, time_est_msg))
+                  .format(ep, avg_score, mem_stats[0], mem_stats[1], mem_pct, 1.0/avg_duration, time_est_msg))
 
         # if sleeping is chosen, then pause for viewing after selected episodes
         if sleeping:
-            if e % 100 < 20:
+            if ep % 100 < 5:
                 time.sleep(1) #allow time to view the Unity window
 
         # if we have met the winning criterion, save a checkpoint and terminate
-        if e > 100  and  avg_score >= training_goal:
-            print("\nEnvironment solved in {:d} episodes!\tAverage Score: {:.2f}"
-                  .format(e, avg_score))
-            mgr.save_checkpoint(CHECKPOINT_PATH, run_name, e)
+        if ep >= AVG_SCORE_EXTENT  and  avg_score >= training_goal:
+            print("\nEnvironment solved in {:d} episodes!\tAverage Score: {:.2f}".format(ep, avg_score))
+            mgr.save_checkpoint(CHECKPOINT_PATH, run_name, ep)
             print("\nMost recent individual episode scores:")
             for j, sc in enumerate(recent_scores):
                 print("{:2d}: {:.2f}".format(j, sc))
             break
 
         # if this solution is clearly going nowhere, then abort early
-        if e > starting_episode + ABORT_EPISODE:
-            hit_rate = float(mem_stats[1]) / e
+        if ep > starting_episode + ABORT_EPISODE:
+            hit_rate = float(mem_stats[1]) / ep
             if hit_rate < 0.01  or  (rem_time > 1.0  and  hit_rate < 0.05):
                 print("\n* Aborting due to inadequate progress.")
                 break
 
     print("\nAvg/max time steps/episode = {:.1f}/{:d}"
-          .format(float(sum_steps)/float(max_episodes-starting_episode),
-                  max_steps_experienced))
+          .format(float(sum_steps)/float(max_episodes-starting_episode), max_steps_experienced))
     return (scores, avg_scores)
 
+#------------------------------------------------------------------------------
 
-def advance_time_step(model, env, states, actions, rewards, next_states, dones):
-    """Advances the agents' model and the environment to the next time step, passing data
-       between the two as needed.
+"""Returns the current state vectors for all agents (a dict of ndarray[n, x] for each agent type)."""
 
-       Params
-           model (Maddpg):         the MADDPG model that manages all agents
-           env (UnityEnvironment): the environment object in which all action occurs
-           states (ndarray):       array of current states of all agents and environment [n, x]
-           actions (ndarray):      array of actions by all agents [n, x]
-           rewards (list):         list of rewards from all agents [n]
-           next_states (ndarray):  array of next states (after action applied) [n, x]
-           dones (list):           list of done flags (int, 1=done, 0=in work) [n]
-       where, in each param, n is the number of agents and x is the number of items per agent.
+def all_agent_states(env_info   : {},               # dict of unityagent.brain.BrainInfo for each brain
+                     types      : {}                # dict of AgentType describing all agent types
+                    ):
 
-       Returns: tuple of (s, a, r, s', done) values
-    """
+#TODO: fix loop on types to get the name from the dict.  It is the key, but also in the struct?
+
+    all_states = {}
+    for t in types:
+        all_states[t.name] = env_info[t.name].vector_observations
+    
+    #TODO: debug
+    print("reset_all_agents returning: ", all_states)
+    return all_states
+
+#------------------------------------------------------------------------------
+
+"""Returns a tuple of (rewards, dones), which are each a dict of lists, where each list represents an agent
+   type, and each list entry represents a single agent of that type.
+"""
+
+def all_agent_results(env_info  : {},               # dict of unityagent.brain.BrainInfo for each brain
+                      types     : {}                # dict of AgentType describing all agent types
+                     ):
+    
+    rewards = {}
+    dones = {}
+    for t in types:
+        rewards[t.name] = env_info[t.name].rewards
+        dones[t.name]   = env_info[t.name].local_done
+    
+    return (rewards, dones)
+
+#------------------------------------------------------------------------------
+
+"""Determines if any agent has raised its 'done' flag.  Returns True if so, False otherwise."""
+
+def any_dones(types : {},   # dict of AgentType describing all agent types
+              dones : {}    # dict of lists of done flags for each agent of each type
+             ):
+
+    result = False
+    for t in types:
+        result |= any(dones[t.name])
+
+    #TODO: debug
+    if result:
+        print("any_dones is true! ", dones)
+
+    return result
+
+#------------------------------------------------------------------------------
+
+"""Finds the max reward value assigned to any agent and returns that value."""
+
+def max_rewards(types: {},  # dict of AgentType describing all agent types
+                rewards: {} # dict of lists of rewards for each agent of each type
+               ):
+    
+    reward = -np.inf
+    for t in types:
+        mr = max(rewards[t.name])
+        if mr > reward:
+            reward = mr
+    
+    #TODO: debug
+    print("max_rewards returning ", reward, ". All elements = ", rewards)
+
+    return reward
+
+#------------------------------------------------------------------------------
+
+"""Advances the agent models and the environment to the next time step, passing data
+    between the two as needed. Note that states is both an input and output; this is
+    necessary to preserve its value, even though the caller probably won't need it
+    between calls.
+
+    Returns: tuple of (states, rewards, dones) where each is a dict of agent types
+"""
+
+def advance_time_step(model         : AgentMgr,         # manager for all agetns and environment
+                      env           : UnityEnvironment, # the environment object in which all action occurs
+                      agent_types   : {},               # dict of AgentType
+                      states        : {}                # dict of current states; each entry represents an agent type,
+                                                        #   which is ndarray[num_agents, x]
+                     ):
 
     # Predict the best actions for the current state and store them in a single ndarray
-    actions = model.act(states) #returns ndarray, one row for each agent
+    actions = model.act(states) #returns dict of ndarray, with each entry having one item for each agent
 
     # get the new state & reward based on this action
     env_info = env.step(actions)
-    next_states = env_info.vector_observations #returns ndarray, one row for each agent
-    rewards = env_info.rewards #returns list of floats, one for each agent
-    dones = env_info.local_done #returns list of bools, one for each agent
+    next_states = all_agent_states(env_info, agent_types)
+    rewards, dones = all_agent_results(env_info, agent_types)
 
     # update the agents with this new info
     model.step(states, actions, rewards, next_states, dones) 
@@ -215,4 +256,4 @@ def advance_time_step(model, env, states, actions, rewards, next_states, dones):
     # roll over new state
     states = next_states
 
-    return (states, actions, rewards, next_states, dones)
+    return (states, rewards, dones)
