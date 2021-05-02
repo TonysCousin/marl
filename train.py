@@ -4,13 +4,13 @@
 import numpy as np
 import torch
 import time
-from collections import deque
+from collections    import deque
 
-from mgr      import Maddpg
+from agent_type     import AgentType
 
-AVG_SCORE_EXTENT = 100 #number of episodes over which running average scores are computed
-CHECKPOINT_PATH = "checkpoint/" #can be empty string, but if a dir is named, needs trailing '/'
-ABORT_EPISODE = 400
+AVG_SCORE_EXTENT = 100 # number of episodes over which running average scores are computed
+CHECKPOINT_PATH = "checkpoint/" # can be empty string, but if a dir is named, needs trailing '/'
+ABORT_EPISODE = 400 # num episodes after which training will abort if insignificant learning is detected
 
 
 """Trains a set of DRL agents in a Unity ML-Agents environment.
@@ -32,26 +32,44 @@ def train(mgr               : AgentMgr,        # manages all agents and their le
           chkpt_interval    : int    = 100     # num episodes between checkpoints being stored
          ):
 
+"""
 JOHN TODO:
 - Store states and actions here as a tuple with a [n, x] ndarray for each agent type. I don't
 think we want all states/actions in a single array/tensor, since it requres zero padding.
-- Have AgentMgr manage the env also so that train() never has to see it?
-- If so, we can remove all brain references here.
+- Future: Have AgentMgr manage the env also so that train() never has to see it?
+If so, we can remove all brain references here.
+"""
 
     # Initialize Unity simulation environment
-    brain_names = env.brain_names
-    num_brains = brain_names.shape[0]
-    brain = env.brains[brain_name]
-    env_info = env.reset(train_mode=True)[brain_name]
-    state_size = len(env_info.vector_observations[0]) #num states for one agent
-    action_size = brain.vector_action_space_size #num actions for one agent
-    num_agents = len(env_info.agents)
-    states = env_info.vector_observations #returns ndarray(2, state_size)
+    agent_types = {}
+    states = {}
+    actions = {}
+    next_states = {}
+    rewards = {}
+    dones = {}
+    for n in env.brain_names:
 
-    actions = np.ndarray((num_agents, action_size))
-    next_states = np.ndarray((num_agents, state_size))
-    rewards = []
-    dones = []
+        # store the type info
+        b = env.brains[n]
+        info = env.reset(train_mode=True)[n]
+        s = len(info.vector_observations[0])
+        a = b.vector_action_space_size
+        num_agents = len(info.agents)
+        type = AgentType(n,b, s, a, num_agents)
+        agent_types[n] = type
+
+        # store initial states and define empty structures for the other performance variables of this type
+        states[n] = info.vector_observations # gets the initial states for these agents
+        actions[n] = np.ndarray((num_agents, a))
+        next_states[n] = np.ndarray((num_agents, s))
+        rewards[n] = []
+        dones[n] = []
+
+
+
+#...STOPPED WORKING HERE
+
+
 
     # collect raw & running avg scores at each episode
     scores = []
