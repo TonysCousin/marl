@@ -5,6 +5,7 @@ import numpy as np
 import torch
 import time
 from collections    import deque
+from unityagents    import UnityEnvironment
 
 from agent_type     import AgentType
 from agent_mgr      import AgentMgr
@@ -20,18 +21,18 @@ PRIME_FEEDBACK_INTERVAL = 4000 # num time steps between visual feedback of primi
    Return: tuple of (list of episode scores (floats), list of running avg scores (floats))
 """
 
-def train(mgr               : AgentMgr,        # manages all agents and their learning process
-          env               : UnityEnvironment,# the envronment model that agents live in
-          run_name          : string = "UNDEF",# tag for config control of learining session
-          starting_episode  : int    = 0,      # episode to begin counting from (used if restarting
-                                               #   from a checkpoint)
-          max_episodes      : int    = 2,      # max num episodes to train if goal isn't met
-          max_time_steps    : int    = 100,    # num time steps allowed in an episode
-          sleeping          : bool   = False,  # should the code pause for a few sec after selected
-                                               #   episodes? (allows for better visualizing)
-          training_goal     : float  = 0.0,    # when avg score (over AVG_SCORE_EXTENT consecutive
-                                               #   episodes) exceeds this value, training is done
-          chkpt_interval    : int    = 100     # num episodes between checkpoints being stored
+def train(mgr               : AgentMgr,         # manages all agents and their learning process
+          env               : UnityEnvironment, # the envronment model that agents live in
+          run_name          : str = "UNDEF",    # tag for config control of learining session
+          starting_episode  : int    = 0,       # episode to begin counting from (used if restarting
+                                                #   from a checkpoint)
+          max_episodes      : int    = 2,       # max num episodes to train if goal isn't met
+          max_time_steps    : int    = 100,     # num time steps allowed in an episode
+          sleeping          : bool   = False,   # should the code pause for a few sec after selected
+                                                #   episodes? (allows for better visualizing)
+          training_goal     : float  = 0.0,     # when avg score (over AVG_SCORE_EXTENT consecutive
+                                                #   episodes) exceeds this value, training is done
+          chkpt_interval    : int    = 100      # num episodes between checkpoints being stored
          ):
 
     #TODO Future: Have AgentMgr manage the env also so that train() never has to see it?
@@ -49,6 +50,7 @@ def train(mgr               : AgentMgr,        # manages all agents and their le
     max_steps_experienced = 0
     recent_scores = deque(maxlen=AVG_SCORE_EXTENT)
     start_time = 0
+    agent_types = mgr.get_agent_types()
 
     # run the simulation for several time steps to prime the replay buffer
     print("Priming the replay buffer", end="")
@@ -160,14 +162,10 @@ def all_agent_states(env_info   : {},               # dict of unityagent.brain.B
                      types      : {}                # dict of AgentType describing all agent types
                     ):
 
-#TODO: fix loop on types to get the name from the dict.  It is the key, but also in the struct?
-
     all_states = {}
     for t in types:
-        all_states[t.name] = env_info[t.name].vector_observations
+        all_states[t] = env_info[t].vector_observations
     
-    #TODO: debug
-    print("reset_all_agents returning: ", all_states)
     return all_states
 
 #------------------------------------------------------------------------------
@@ -183,8 +181,8 @@ def all_agent_results(env_info  : {},               # dict of unityagent.brain.B
     rewards = {}
     dones = {}
     for t in types:
-        rewards[t.name] = env_info[t.name].rewards
-        dones[t.name]   = env_info[t.name].local_done
+        rewards[t] = env_info[t].rewards
+        dones[t]   = env_info[t].local_done
     
     return (rewards, dones)
 
@@ -198,7 +196,7 @@ def any_dones(types : {},   # dict of AgentType describing all agent types
 
     result = False
     for t in types:
-        result |= any(dones[t.name])
+        result |= any(dones[t])
 
     #TODO: debug
     if result:
@@ -216,7 +214,7 @@ def max_rewards(types: {},  # dict of AgentType describing all agent types
     
     reward = -np.inf
     for t in types:
-        mr = max(rewards[t.name])
+        mr = max(rewards[t])
         if mr > reward:
             reward = mr
     
@@ -244,6 +242,7 @@ def advance_time_step(model         : AgentMgr,         # manager for all agetns
 
     # Predict the best actions for the current state and store them in a single ndarray
     actions = model.act(states) #returns dict of ndarray, with each entry having one item for each agent
+    print("\nactions = ", actions)
 
     # get the new state & reward based on this action
     env_info = env.step(actions)

@@ -3,6 +3,9 @@
     Note that there is to be only one object of this type in the system.
 """
 
+import numpy as np
+
+from unityagents    import UnityEnvironment
 from agent_type     import AgentType
 
 class AgentMgr:
@@ -12,7 +15,7 @@ class AgentMgr:
     def __init__(self,
                  env    : UnityEnvironment  # the envronment model that agents live in
                 ):
-
+        
         # store the info for each type of ageint in use
         self.agent_types = {}
         env_info = env.reset(train_mode=True)
@@ -20,9 +23,9 @@ class AgentMgr:
             brain = env.brains[name]
             type_info = env_info[name]
             ns = len(type_info.vector_observations[0])
-            na = brain.vector_action_space_size
+            max_a = brain.vector_action_space_size
             num_agents = len(type_info.agents)
-            self.agent_types[name] = AgentType(name, brain, ns, na, num_agents)
+            self.agent_types[name] = AgentType(name, brain, ns, max_a, num_agents)
             # Note that this loop leaves the NNs for each type undefined. They need
             # to be defined in this constructor, however.
         
@@ -34,3 +37,46 @@ class AgentMgr:
 
     def get_agent_types(self):
         return self.agent_types
+
+    #------------------------------------------------------------------------------
+
+    
+    def is_learning_underway(self):
+        return True #TODO: dummy return
+    
+    #------------------------------------------------------------------------------
+
+
+    def reset(self):
+        pass #TODO: dummy
+
+    #------------------------------------------------------------------------------
+
+
+    def save_checkpoint(self, path, name, episode):
+        pass #TODO: dummy
+
+    #------------------------------------------------------------------------------
+
+
+    def get_memory_stats(self):
+        return (42, 4) #TODO: dummy
+
+    #------------------------------------------------------------------------------
+
+
+    def act(self, states):
+        #TODO: dummy logic
+        a = {}
+        for t in self.agent_types:
+            actions = np.array((1, self.agent_types[t].num_agents), dtype=int) #one element for each agent of this type
+            for i in range(self.agent_types[t].num_agents):
+                actions[i] = i
+            a[t] = actions
+        return a
+
+    #------------------------------------------------------------------------------
+
+
+    def step(self, states, actions, rewards, next_states, dones):
+        pass #TODO: dummy
