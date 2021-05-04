@@ -21,7 +21,7 @@ from replay_buffer  import ReplayBuffer
 # (no longer used as long as replay buffer priming is occurring)
 BAD_STEP_KEEP_PROB_INIT = 0.04
 
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
 class Maddpg:
@@ -65,7 +65,7 @@ class Maddpg:
         self.action_size = action_size
         self.num_agents = num_agents
         self.bad_step_keep_prob = min(bad_step_prob, 1.0)
-        self.rng = default_rng(random_seed)
+        self.prng = default_rng(random_seed)
         self.batch_size = batch_size
         self.noise_decay = min(noise_decay, 1.0)
         self.noise_scale = noise_scale
@@ -89,7 +89,7 @@ class Maddpg:
         self.learning_underway = False
 
         # define simple replay memory common to all agents
-        self.memory = ReplayBuffer(action_size, buffer_size, batch_size, buffer_prime_size,
+        self.erb = ReplayBuffer(action_size, buffer_size, batch_size, buffer_prime_size,
                                    random_seed)
 
         # create the actor & critic NNs and schedulers for LR annealing
@@ -104,10 +104,10 @@ class Maddpg:
         for i in range(num_agents):
             self.actor_policy.append(Actor(state_size, action_size, random_seed,
                                            fc1_units=layer1_units, fc2_units=layer2_units) \
-                                          .to(device))
+                                          .to(DEVICE))
             self.actor_target.append(Actor(state_size, action_size, random_seed,
                                            fc1_units=layer1_units, fc2_units=layer2_units) \
-                                          .to(device))
+                                          .to(DEVICE))
             self.actor_optimizer.append(optim.Adam(self.actor_policy[i].parameters(),
                                                    lr=lr_actor))
             self.actor_scheduler.append(StepLR(self.actor_optimizer[i],
@@ -116,10 +116,10 @@ class Maddpg:
 
             self.critic_policy.append(Critic(num_agents*state_size, num_agents*action_size,
                                              random_seed, fcs1_units=layer1_units,
-                                             fc2_units=layer2_units).to(device))
+                                             fc2_units=layer2_units).to(DEVICE))
             self.critic_target.append(Critic(num_agents*state_size, num_agents*action_size,
                                              random_seed, fcs1_units=layer1_units,
-                                             fc2_units=layer2_units).to(device))
+                                             fc2_units=layer2_units).to(DEVICE))
             self.critic_optimizer.append(optim.Adam(self.critic_policy[i].parameters(), lr=lr_critic,
                                                     weight_decay=weight_decay))
             self.critic_scheduler.append(StepLR(self.critic_optimizer[i],
@@ -160,7 +160,7 @@ class Maddpg:
             for i in range(self.num_agents):
 
                 # get the raw action
-                state = torch.from_numpy(states[i]).float().to(device)
+                state = torch.from_numpy(states[i]).float().to(DEVICE)
                 self.actor_policy[i].eval()
                 with torch.no_grad():
                     action = self.actor_policy[i](state).cpu().data.numpy()
@@ -187,7 +187,7 @@ class Maddpg:
         # range of action space
         else:
             for i in range(self.num_agents):
-                actions[i, :] = torch.from_numpy(2.0 * self.rng.random((1, self.num_agents)) - 1.0)
+                actions[i, :] = torch.from_numpy(2.0 * self.prng.random((1, self.num_agents)) - 1.0)
 
         return actions
 
@@ -210,7 +210,7 @@ class Maddpg:
 
         # set up probability of keeping bad experiences based upon whether the buffer is
         # full enough to start learning
-        if len(self.memory) > max(self.batch_size, self.buffer_prime_size):
+        if len(self.erb) > max(self.batch_size, self.buffer_prime_size):
             threshold = self.bad_step_keep_prob
             self.learning_underway = True
         else:
@@ -218,8 +218,8 @@ class Maddpg:
 
         # if this step got some reward then keep it;
         # if it did not score any points, then use random draw to decide if it's a keeper
-        if max(rewards) > 0.0  or  self.rng.random() < threshold:
-            self.memory.add(obs, actions, rewards, next_obs, dones)
+        if max(rewards) > 0.0  or  self.prng.random() < threshold:
+            self.erb.add(obs, actions, rewards, next_obs, dones)
 
         # initiate learning on each agent, but only every N time steps
         self.learn_control += 1
@@ -229,7 +229,7 @@ class Maddpg:
             if self.learn_control >= self.learn_every:
                 self.learn_control = 0
                 for j in range(self.learn_iter):
-                   experiences = self.memory.sample()
+                   experiences = self.erb.sample()
                    self.learn(experiences)
 
             # update learning rate annealing; this is counting episodes, not time steps
@@ -267,33 +267,33 @@ class Maddpg:
 
         # create a next_states tensor [b, x] where each row represents the states
         # of all agents
-        next_states = next_obs.view(self.batch_size, -1).to(device)
+        next_states = next_obs.view(self.batch_size, -1).to(DEVICE)
 
         # remove the unused dimension from the rewards & dones tensors; allow Q calculation to
         # use differing values of these two for each agent, since their situations may differ
-        reward = rewards.squeeze().to(device)
-        done = dones.squeeze().to(device)
+        reward = rewards.squeeze().to(DEVICE)
+        done = dones.squeeze().to(DEVICE)
 
         # reshape the observations & actions so that all agents are represented on each row
-        all_agents_states = obs.view(self.batch_size, -1).to(device)
-        all_agents_actions = actions.view(self.batch_size, -1).to(device)
+        all_agents_states = obs.view(self.batch_size, -1).to(DEVICE)
+        all_agents_actions = actions.view(self.batch_size, -1).to(DEVICE)
 
         #---------- use the current actors to compute action data
 
         target_actions = torch.zeros(self.batch_size, 2*self.action_size, dtype=torch.float) \
-                               .to(device)
+                               .to(DEVICE)
         actions_pred = torch.zeros(self.batch_size, 2*self.action_size, dtype=torch.float)
 
         # need to do this for all agents before updating the critics, since critics see all
         for agent in range(self.num_agents):
 
             # grab next state vectors and use this agent's target network to predict next actions
-            ns = next_obs[:, agent, :].to(device)
+            ns = next_obs[:, agent, :].to(DEVICE)
             target_actions[:, agent*self.action_size:(agent+1)*self.action_size] = \
                            self.actor_target[agent](ns)
 
             # now get current state vector and use this agent's current policy to get current action
-            s = obs[:, agent, :].to(device)
+            s = obs[:, agent, :].to(DEVICE)
             actions_pred[:, agent*self.action_size:(agent+1)*self.action_size] = \
                            self.actor_policy[agent](s)
 
@@ -351,7 +351,7 @@ class Maddpg:
             tgt.data.copy_(self.tau*pol.data + (1.0-self.tau)*tgt.data)
 
 
-    def get_memory_stats(self):
+    def get_erb_stats(self):
         """Gets statistics on the replay buffer memory contents.
 
            Return:  tuple of (size, good_exp), where size is total number
@@ -359,7 +359,7 @@ class Maddpg:
                       items with a reward that exceeds the threshold of "good".
         """
 
-        return (len(self.memory), self.memory.num_rewards_exceeding_threshold())
+        return (len(self.erb), self.erb.num_rewards_exceeding_threshold())
 
 
     def is_learning_underway(self):
@@ -390,7 +390,7 @@ class Maddpg:
             checkpoint[key_oc] = self.critic_optimizer[i].state_dict()
 
         # TODO: figure out how to store the buffer also (error on attribute lookup)
-        #checkpoint["replay_buffer"] = self.memory
+        #checkpoint["replay_buffer"] = self.erb
  
         filename = "{}{}_{}.pt".format(path, tag, episode)
         torch.save(checkpoint, filename)
@@ -449,7 +449,7 @@ class Maddpg:
                 key_oc = "optimizer_critic{}".format(i)
                 self.critic_policy[i].load_state_dict(checkpoint[key_c])
                 self.critic_optimizer[i].load_state_dict(checkpoint[key_oc])
-                #self.memory = checkpoint["replay_buffer"]
+                #self.erb = checkpoint["replay_buffer"]
             print("Checkpoint v4 loaded for {}, episode {}".format(tag, episode))
 
         else:

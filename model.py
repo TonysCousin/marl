@@ -1,9 +1,20 @@
-# Defines the Actor and Critic NN models for use in the Tennis project.
-#
-# This code is a copy of the model used for my continuous control (Reacher) project.
-#
-# This code is a slight modification from code provided by the Udacity instructor team.
-#
+"""Defines all of the NN models for each agent type in the Soccer game.
+
+    There are two types of agents, each with an actor NN and a critic NN.
+    All agents of each type will share the type's NNs.
+
+    Since the NNs embody the personality of the agent type, this code is
+    necessarily specific to this particular environment/simulation.
+"""
+
+#TODO: JOHN THIS IS OLD CODE FROM CLASS
+
+
+
+
+
+
+
 
 import numpy as np
 import torch

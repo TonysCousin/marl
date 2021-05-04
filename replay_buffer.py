@@ -17,14 +17,13 @@ REWARD_THRESHOLD = 0.0 # value above which is considered a "good" experience
 class ReplayBuffer:
     """Fixed-size buffer to store experience tuples."""
 
-    def __init__(self, action_size, buffer_size, batch_size, prime_size, seed):
+    def __init__(self, action_size, buffer_size, batch_size, prime_size, prng):
         """Initialize a ReplayBuffer object.
         Params
             buffer_size (int): maximum number of experiences that can be stored
             batch_size (int):  size of each training batch extracted during a sample
             prime_size (int):  initial number of experiences that are considered as random
                                  priming data (don't need to be kept once buffer is full)
-            seed (float):      seed used for the random number generator
         """
 
         self.action_size = action_size
