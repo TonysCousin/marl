@@ -12,6 +12,7 @@ import numpy as np
 
 from unityagents    import UnityEnvironment
 from agent_type     import AgentType
+from agent_models   import AgentModels
 
 DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -22,6 +23,7 @@ class AgentMgr:
 
     def __init__(self,
                  env            : UnityEnvironment, # the envronment model that agents live in
+                 agent_models   : AgentModels,      # holds all of the NN models for each type of agent
                  random_seed    : int = 0,          # seed for the PRNG
                  batch_size     : int = 32,         # number of experiences in a learning batch
                  buffer_size    : int = 100000,     # capacity of the experience replay buffer
@@ -32,7 +34,7 @@ class AgentMgr:
 
         self.batch_size = batch_size
         self.buffer_size = buffer_size
-        self-use_noise = use_noise
+        self.use_noise = use_noise
         
         # store the info for each type of ageint in use
         self.agent_types = {}
@@ -43,29 +45,20 @@ class AgentMgr:
             ns = len(type_info.vector_observations[0])
             max_a = brain.vector_action_space_size
             num_agents = len(type_info.agents)
-            self.agent_types[name] = AgentType(name, brain, ns, max_a, num_agents)
-            # Note that this loop leaves the NNs for each type undefined. They need
-            # to be defined in this constructor, however.
+            actor = agent_models.get_actor_nn_for(name)
+            critic = agent_models.get_critic_nn_for(name)
+            actor_lr = agent_models.get_actor_lr_for(name)
+            critic_lr = agent_models.get_critic_lr_for(name)
+            actor_weight_decay = agent_models.get_actor_weight_decay_for(name)
+            critic_weight_decay = agent_models.get_critic_weight_decay_for(name)
+            self.agent_types[name] = AgentType(name, brain, ns, max_a, num_agents, actor, critic,
+                                                actor_lr, critic_lr, actor_weight_decay, critic_weight_decay)
         
         # initialize other internal stuff
         self.learning_underway = True #set to False here if buffer priming is introduced
 
         # define simple experience replay buffer common to all agents
         self.erb = ReplayBuffer(action_size, buffer_size, batch_size, buffer_prime_size, self.prng)
-
-        
-        
-        #TODO: need to define all the NNs here and add them to the agent_types dict.
-        #       Can I generalize this, since the model file will be application-specific,
-        #       and do some dependency injection of the NNs here?
-
-
-
-        # Instantiate the neural networks that give each agent its behavioral personality.
-        # This is where the code cannot be generalized - each agent type needs its own NN
-        # structure, depending on its desired functioins, in puts and outputs.  
-        # They are structured for MADDPG learning, with a pair of critics (policy & target)
-        # and a pair of actors (policy & target) for each agent type.
 
     #------------------------------------------------------------------------------
 
@@ -83,21 +76,10 @@ class AgentMgr:
     
     #------------------------------------------------------------------------------
 
+    """Performs any resets that are necessary when a new episode is to begin."""
 
     def reset(self):
-        pass #TODO: dummy
-
-    #------------------------------------------------------------------------------
-
-
-    def save_checkpoint(self, path, name, episode):
-        pass #TODO: dummy
-
-    #------------------------------------------------------------------------------
-
-
-    def get_memory_stats(self):
-        return (42, 4) #TODO: dummy
+        pass #Nothing needed at this time
 
     #------------------------------------------------------------------------------
 
@@ -117,3 +99,15 @@ class AgentMgr:
 
     def step(self, states, actions, rewards, next_states, dones):
         pass #TODO: dummy
+
+        #------------------------------------------------------------------------------
+
+
+    def save_checkpoint(self, path, name, episode):
+        pass #TODO: dummy
+
+    #------------------------------------------------------------------------------
+
+
+    def get_memory_stats(self):
+        return (42, 4) #TODO: dummy

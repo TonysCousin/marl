@@ -7,29 +7,36 @@
     necessarily specific to this particular environment/simulation.
 """
 
-#TODO: JOHN THIS IS OLD CODE FROM CLASS
-
-
-
-
-
-
-
-
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+#TODO: code elsewhere will need to create an AgentModels object, populate it with these models,
+#      then pass that object to the AgentMgr.
+
+#------------------------------------------------------------------------------
+
+"""Returns a tuple with the range of values desired for initialization of the hidden layer params."""
+
 def hidden_init(layer):
-    """Define a tuple with the range of values desired for initialization of the hidden layer."""
 
     fan_in = layer.weight.data.size()[0]
     lim = 1. / np.sqrt(fan_in)
     return (-lim, lim)
 
 
-class Actor(nn.Module):
+
+
+#TODO: JOHN THIS IS OLD CODE FROM CLASS
+
+
+
+
+
+#------------------------------------------------------------------------------
+
+class GoalieActor(nn.Module):
     """Actor (Policy) Model."""
 
     def __init__(self, state_size, action_size, seed, fc1_units=256, fc2_units=128):
@@ -66,7 +73,9 @@ class Actor(nn.Module):
         return F.tanh(self.fc3(x))
 
 
-class Critic(nn.Module):
+#------------------------------------------------------------------------------
+
+class GoalieCritic(nn.Module):
     """Critic (Value) Model."""
 
     def __init__(self, state_size, action_size, seed, fcs1_units=256, fc2_units=128):
