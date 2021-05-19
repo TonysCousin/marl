@@ -83,16 +83,48 @@ class AgentMgr:
 
     #------------------------------------------------------------------------------
 
+    """Computes the next actions for all agents, given the current state info.
 
-    def act(self, states):
-        #TODO: dummy logic
-        a = {}
-        for t in self.agent_types:
-            actions = np.array((1, self.agent_types[t].num_agents), dtype=int) #one element for each agent of this type
-            for i in range(self.agent_types[t].num_agents):
-                actions[i] = i
-            a[t] = actions
-        return a
+        Return is a dict of actions, one entry for each agent type.  Each ndarray contains one entry for each 
+        agent of that type.
+    """
+
+    def act(self, 
+            states          : {},           # dict of current states; each entry represents an agent type,
+                                            #   which is ndarray[num_agents, x]
+            is_inference    : bool = False, # are we performing an inference using the current policy?
+            add_noise       : bool = False  # are we to add random noise to the action output?
+           ):
+
+        act = {}
+
+        if self.learning_underway  or  is_inference:
+            for t in self.agent_types:
+                actions = np.array((1, t.num_agents), dtype=int) #one element for each agent of this type
+                t.actor_policy.eval()
+
+                for i in range(t.num_agents):
+
+                    # get the action for this agent
+                    s = torch.from_numpy(states[t][i]).float().to(DEVICE)
+                    with torch.no_grad():
+                        actions[i] = t.actor_policy(s).cpu().data.numpy()
+
+                    # add noise if appropriate
+                    if add_noise:
+                        pass
+
+                t.actor_policy.train()
+
+            act[t] = actions
+
+        else: # must be priming the replay buffer
+            for t in self.agent_types:
+                actions = np.array((1, t.num_agents), dtype=int)
+                actions = self.prng.integers(0, t.max_action_val, t.num_agents, dtype=int, endpoint=False)
+            act[t] = actions
+
+        return act
 
     #------------------------------------------------------------------------------
 
