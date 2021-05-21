@@ -27,7 +27,8 @@ class AgentMgr:
                  random_seed    : int = 0,          # seed for the PRNG
                  batch_size     : int = 32,         # number of experiences in a learning batch
                  buffer_size    : int = 100000,     # capacity of the experience replay buffer
-                 use_noise      : bool = False      # should we inject random noise into actions?
+                 use_noise      : bool = False,     # should we inject random noise into actions?
+                 update_factor  : float = 0.001     # Tau factor for performing soft updates to target NN models
                 ):
 
         self.prng = default_rng(random_seed) #the one and only PRNG in the entire system (must be passed around)
@@ -35,6 +36,7 @@ class AgentMgr:
         self.batch_size = batch_size
         self.buffer_size = buffer_size
         self.use_noise = use_noise
+        self.tau = update_factor
         
         # store the info for each type of ageint in use
         self.agent_types = {}
@@ -55,7 +57,9 @@ class AgentMgr:
                                                 actor_lr, critic_lr, actor_weight_decay, critic_weight_decay)
         
         # initialize other internal stuff
-        self.learning_underway = True #set to False here if buffer priming is introduced
+        self.learning_underway = False 
+        self.learn_control = 0          #num time steps between learning events
+        self.learn_every = 1            #number of time steps between learning events
 
         # define simple experience replay buffer common to all agents
         self.erb = ReplayBuffer(action_size, buffer_size, batch_size, buffer_prime_size, self.prng)
@@ -129,10 +133,93 @@ class AgentMgr:
     #------------------------------------------------------------------------------
 
 
-    def step(self, states, actions, rewards, next_states, dones):
-        pass #TODO: dummy
+        """Stores a new experience from the environment in replay buffer, if appropriate,
+           and advances the agents by one time step.
 
-        #------------------------------------------------------------------------------
+           Return:  none
+        """
+
+    def step(self, 
+            states          : {},           # dict of current states; each entry represents an agent type,
+                                            #   which is ndarray[num_agents, x]
+             actions,       : {},           # dict of actions taken; each entry is an agent type, which is 
+                                            #   an ndarray[num_agents, x]
+             rewards,       : {},           # dict of rewards, each entry an agent type, which is a list of floats
+             next_states    : {},           # dict of next states after actions are taken; each entry an agent type
+             dones          : {}            # dict of done flags, each entry an agent type, which is a list of bools
+            ):
+        
+        # set up probability of keeping bad experiences based upon whether the buffer is
+        # full enough to start learning
+        if len(self.erb) > max(self.batch_size, self.buffer_prime_size):
+            threshold = self.bad_step_keep_prob
+            self.learning_underway = True
+        else:
+            threshold = BAD_STEP_KEEP_PROB_INIT
+
+        # if this step got some reward then keep it;
+        # if it did not score any points, then use random draw to decide if it's a keeper
+        if get_max(rewards) > 0.0  or  self.prng.random() < threshold:
+            self.erb.add(obs, actions, rewards, next_obs, dones)
+
+        # initiate learning on each agent, but only every N time steps
+        self.learn_control += 1
+        if self.learning_underway:
+
+            # perform the learning if it is time
+            if self.learn_control >= self.learn_every:
+                self.learn_control = 0
+                experiences = self.erb.sample()
+                self.learn(experiences)
+
+            """For possible future implementation:
+            # update learning rate annealing; this is counting episodes, not time steps
+            if is_episode_done(dones):
+                for i in range(self.num_agents):
+                    self.actor_scheduler[i].step()
+                    self.critic_scheduler[i].step()
+                    clr = self.critic_scheduler[i].get_lr()[0]
+                    if clr < self.prev_clr: # assumes both critics have same LR schedule
+                        if clr < 1.0e-7:
+                            print("\n*** CAUTION: low learning rates: {:.7f}, {:.7f}" \
+                                  .format(self.actor_scheduler[0].get_lr()[0], clr))
+                        self.prev_clr = clr
+            """
+
+    #------------------------------------------------------------------------------
+
+
+    """Update policy and value parameters using the given batch of experience tuples.
+        Q_targets = r + γ * critic_target(next_state, actor_target(next_state))
+        where:
+            actor_target(state) -> action
+            critic_target(state, action) -> Q-value
+        
+        Each agent type will learn in its own loop. Since all agents of a given type share a NN model, the number
+        of learning iterations can be dependent on the number of agents of that type. An experience tuple will be
+        weighted toward those types with the most individual agents. Therefore, types with few agents may be better
+        trained for multiple iterations at each training step, in order to keep total learning iterations on the
+        models more-or-less even across all NN models.
+    """
+
+    def learn(self,
+              experiences   : ()    # tuple of dicts (s, a, r, s', done), where each dict contains an entry for each
+                                    #   agent type. Each of these entries is a tensor of [b, a, x], where b is
+                                    #   batch size, a is number of agents of that type, and
+                                    #       x is number of states (for one agent of that type) for s and s'
+                                    #       x is number of action values (for one agent of that type) for a
+                                    #       x is 1 for r and done
+             ):
+
+
+
+
+
+
+
+
+
+    #------------------------------------------------------------------------------
 
 
     def save_checkpoint(self, path, name, episode):
@@ -141,5 +228,69 @@ class AgentMgr:
     #------------------------------------------------------------------------------
 
 
-    def get_memory_stats(self):
-        return (42, 4) #TODO: dummy
+    """Gets statistics on the replay buffer memory contents.
+
+        Return:  tuple of (size, good_exp), where size is total number
+                    of items in the buffer, and good_exp is the number of those
+                    items with a reward that exceeds the threshold of "good".
+    """
+
+    def get_erb_stats(self):
+
+        return (len(self.erb), self.erb.num_rewards_exceeding_threshold())
+
+    #------------------------------------------------------------------------------
+
+
+    """Finds the max value of any item embedded in a dict of lists of items. Assumes
+        the items are numerical (integer or float).
+
+        Returns the max value found.
+    """
+
+    def get_max(self,
+                d       : {}    # a dict of lists of items
+               ):
+        
+        m = -1e20
+        for item_list in d:
+            for item in item_list:
+                if item > m:
+                    m = item
+        
+        return m
+    
+
+    #------------------------------------------------------------------------------
+
+
+    """Returns true if at least one flag in the input dict is true, false otherwise."""
+
+    def is_episode_done(self,
+                        flags   : {}    # dict of lists of bool flags indicating completion
+                       ):
+        
+        for flag_list in flags:
+            for flag in flag_list:
+                if flag:
+                    return True
+        
+        return False
+
+    
+
+    #------------------------------------------------------------------------------
+
+
+    """Updates the target model parameters to be a little closer to those of the policy model.
+        θ_target = τ*θ_policy + (1 - τ)*θ_target; where tau < 1
+    """
+
+    def soft_update(self, 
+                    policy_model    : nn.Module,    # weights copied from here
+                    target_model    : nn.Module     # weights copied to here
+                   ):
+
+        for tgt, pol in zip(target_model.parameters(), policy_model.parameters()):
+            tgt.data.copy_(self.tau*pol.data + (1.0-self.tau)*tgt.data)
+
