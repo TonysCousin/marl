@@ -13,6 +13,7 @@ import numpy as np
 from unityagents    import UnityEnvironment
 from agent_type     import AgentType
 from agent_models   import AgentModels
+import utils
 
 DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -31,7 +32,7 @@ class AgentMgr:
                  update_factor  : float = 0.001     # Tau factor for performing soft updates to target NN models
                 ):
 
-        self.prng = default_rng(random_seed) #the one and only PRNG in the entire system (must be passed around)
+        self.prng = np.random.default_rng(random_seed) #the one and only PRNG in the entire system (must be passed around)
 
         self.batch_size = batch_size
         self.buffer_size = buffer_size
@@ -54,7 +55,7 @@ class AgentMgr:
             actor_weight_decay = agent_models.get_actor_weight_decay_for(name)
             critic_weight_decay = agent_models.get_critic_weight_decay_for(name)
             self.agent_types[name] = AgentType(name, brain, ns, max_a, num_agents, actor, critic,
-                                                actor_lr, critic_lr, actor_weight_decay, critic_weight_decay)
+                                               actor_lr, critic_lr, actor_weight_decay, critic_weight_decay)
         
         # initialize other internal stuff
         self.learning_underway = False 
@@ -132,7 +133,6 @@ class AgentMgr:
 
     #------------------------------------------------------------------------------
 
-
         """Stores a new experience from the environment in replay buffer, if appropriate,
            and advances the agents by one time step.
 
@@ -140,7 +140,7 @@ class AgentMgr:
         """
 
     def step(self, 
-            states          : {},           # dict of current states; each entry represents an agent type,
+             states         : {},           # dict of current states; each entry represents an agent type,
                                             #   which is ndarray[num_agents, x]
              actions,       : {},           # dict of actions taken; each entry is an agent type, which is 
                                             #   an ndarray[num_agents, x]
@@ -160,7 +160,7 @@ class AgentMgr:
         # if this step got some reward then keep it;
         # if it did not score any points, then use random draw to decide if it's a keeper
         if get_max(rewards) > 0.0  or  self.prng.random() < threshold:
-            self.erb.add(obs, actions, rewards, next_obs, dones)
+            self.erb.add(states, actions, rewards, next_states, dones)
 
         # initiate learning on each agent, but only every N time steps
         self.learn_control += 1
@@ -187,7 +187,6 @@ class AgentMgr:
             """
 
     #------------------------------------------------------------------------------
-
 
     """Update policy and value parameters using the given batch of experience tuples.
         Q_targets = r + γ * critic_target(next_state, actor_target(next_state))
@@ -240,29 +239,6 @@ class AgentMgr:
         return (len(self.erb), self.erb.num_rewards_exceeding_threshold())
 
     #------------------------------------------------------------------------------
-
-
-    """Finds the max value of any item embedded in a dict of lists of items. Assumes
-        the items are numerical (integer or float).
-
-        Returns the max value found.
-    """
-
-    def get_max(self,
-                d       : {}    # a dict of lists of items
-               ):
-        
-        m = -1e20
-        for item_list in d:
-            for item in item_list:
-                if item > m:
-                    m = item
-        
-        return m
-    
-
-    #------------------------------------------------------------------------------
-
 
     """Returns true if at least one flag in the input dict is true, false otherwise."""
 
