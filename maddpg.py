@@ -281,8 +281,9 @@ class Maddpg:
         #---------- use the current actors to compute action data
 
         target_actions = torch.zeros(self.batch_size, 2*self.action_size, dtype=torch.float) \
-                               .to(DEVICE)
-        actions_pred = torch.zeros(self.batch_size, 2*self.action_size, dtype=torch.float)
+                                    .to(DEVICE)
+        cur_actions = torch.zeros(self.batch_size, 2*self.action_size, dtype=torch.float) \
+                                    .to(DEVICE)
 
         # need to do this for all agents before updating the critics, since critics see all
         for agent in range(self.num_agents):
@@ -292,9 +293,9 @@ class Maddpg:
             target_actions[:, agent*self.action_size:(agent+1)*self.action_size] = \
                            self.actor_target[agent](ns)
 
-            # now get current state vector and use this agent's current policy to get current action
+            # now get current state vector and use this agent's current policy to decide current action
             s = obs[:, agent, :].to(DEVICE)
-            actions_pred[:, agent*self.action_size:(agent+1)*self.action_size] = \
+            cur_actions[:, agent*self.action_size:(agent+1)*self.action_size] = \
                            self.actor_policy[agent](s)
 
         # now loop through all agents to actually update the networks
@@ -321,7 +322,7 @@ class Maddpg:
             #---------- update actor networks
 
             # Compute actor loss
-            actor_loss = -self.critic_policy[agent](all_agents_states, actions_pred).mean()
+            actor_loss = -self.critic_policy[agent](all_agents_states, cur_actions).mean()
 
             # Minimize the loss
             retain_graph = agent < self.num_agents - 1 # retain for all except last agent

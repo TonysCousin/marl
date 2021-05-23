@@ -9,10 +9,13 @@
 """
 
 import numpy as np
+import torch
+import torch.nn as nn
 
 from unityagents    import UnityEnvironment
 from agent_type     import AgentType
 from agent_models   import AgentModels
+from replay_buffer  import ReplayBuffer
 import utils
 
 DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -54,7 +57,7 @@ class AgentMgr:
             critic_lr = agent_models.get_critic_lr_for(name)
             actor_weight_decay = agent_models.get_actor_weight_decay_for(name)
             critic_weight_decay = agent_models.get_critic_weight_decay_for(name)
-            self.agent_types[name] = AgentType(name, brain, ns, max_a, num_agents, actor, critic,
+            self.agent_types[name] = AgentType(DEVICE, name, brain, ns, max_a, num_agents, actor, critic,
                                                actor_lr, critic_lr, actor_weight_decay, critic_weight_decay)
         
         # initialize other internal stuff
@@ -63,7 +66,7 @@ class AgentMgr:
         self.learn_every = 1            #number of time steps between learning events
 
         # define simple experience replay buffer common to all agents
-        self.erb = ReplayBuffer(action_size, buffer_size, batch_size, buffer_prime_size, self.prng)
+        self.erb = ReplayBuffer(buffer_size, batch_size, buffer_prime_size, self.prng)
 
     #------------------------------------------------------------------------------
 
@@ -142,9 +145,9 @@ class AgentMgr:
     def step(self, 
              states         : {},           # dict of current states; each entry represents an agent type,
                                             #   which is ndarray[num_agents, x]
-             actions,       : {},           # dict of actions taken; each entry is an agent type, which is 
+             actions        : {},           # dict of actions taken; each entry is an agent type, which is 
                                             #   an ndarray[num_agents, x]
-             rewards,       : {},           # dict of rewards, each entry an agent type, which is a list of floats
+             rewards        : {},           # dict of rewards, each entry an agent type, which is a list of floats
              next_states    : {},           # dict of next states after actions are taken; each entry an agent type
              dones          : {}            # dict of done flags, each entry an agent type, which is a list of bools
             ):
@@ -210,7 +213,70 @@ class AgentMgr:
                                     #       x is 1 for r and done
              ):
 
+        #.........Prepare the input data
 
+        # extract the elements of the replayed batch of experiences
+        states, actions, rewards, next_states, dones = experiences
+
+        # find the total numbers of states & actions across all agents
+        num_states_all = 0
+        num_actions_all = 0
+        for t in self.agent_types:
+            num_states_all += t.state_size * t.num_agents
+            num_actions_all += 1 * t.num_agents #for now we only define 1 enumerated action per agent
+        
+        # create tensors to hold states, actions and next_states for all agents where all agents are
+        # represented in a single row (each row is an experience in the training batch) so size is [b, x]
+        first = True
+        for t in self.agent_types:
+            s = states[t].view(self.batch_size, -1)
+            a = actions[t].view(self.batch_size, -1)
+            n = next_states[t].view(self.batch_size, -1)
+            if first:
+                states_all = s.to(DEVICE)
+                actions_all = a.to(DEVICE)
+                next_states_all = n.to(DEVICE)
+                first = False
+
+            else:
+                states_all = torch.cat((states_all, s), dim=1)
+                actions_all = torch.cat((actions_all, a), dim=1)
+                next_states_all = torch.cat((next_states_all, n), dim=1)
+
+        #.........Use the current actor NNs to get possible action values
+
+        # need to do this for all agents before updating the critics, since critics see all
+        first = True
+        for t in self.agent_types:
+            for agent in range(t.num_agents):
+
+                # grab next state vectors and use this agent's target network to predict next actions
+                ns = next_states[t][:, agent, :]
+                ta = t.actor_target(ns)
+
+                # grab current state vector and us this agent's current policy to decide current actions
+                cs = states[t][:, agent, :]
+                ca = t.actor_policy(cs)
+
+                if first:
+                    target_actions = ta.to(DEVICE)
+                    cur_actions = ca.to(DEVICE)
+                    first = False
+                else:
+                    target_actions = tensor.cat((target_actions, ta), dim=1)
+                    cur_actions = tensor.cat((cur_actions, ca), dim=1)
+                
+                # resulting target_actions and cur_actions tensors are of shape [b, z], where z is the
+                # sum of all agents' action spaces (all agents are represented in a single row)
+
+        #.........Update the critic NNs based on learning losses
+
+        print("///// DIDN'T FINISH WRITING learn()!")
+
+        #.........Update the actor NNs based on learning losses
+
+
+        #.........Update the target NNs for both critics & actors
 
 
 

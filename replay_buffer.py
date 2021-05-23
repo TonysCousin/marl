@@ -22,10 +22,6 @@ class ReplayBuffer:
     """ Initialize a ReplayBuffer object."""
 
     def __init__(self, 
-                 action_size, #TODO figure out what to do with this!
-
-
-
                  buffer_size    : int,                  # max num experiences that can be stored
                  batch_size     : int,                  # num experiences pulled for each training batch in a sample
                  prime_size     : int,                  # num initial experiences that are considered random priming
@@ -39,7 +35,6 @@ class ReplayBuffer:
         if prime_size >= buffer_size:
             print("\n\n///// WARNING: replay buffer prime size {} > buffer size of {}\n".format(prime_size, buffer_size))
 
-        self.action_size = action_size
         self.buffer_size = buffer_size
         self.memory = deque(maxlen=buffer_size)  #this is the buffer
         self.batch_size = batch_size
