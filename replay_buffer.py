@@ -12,9 +12,9 @@ import torch
 import random
 from collections import namedtuple, deque
 
-import utils
+from utils      import get_max
 
-REWARD_THRESHOLD = 0.0 # value above which is considered a "good" experience
+Experience = namedtuple("Experience", field_names=["state", "action", "reward", "next_state", "done"])
 
 
 class ReplayBuffer:
@@ -26,6 +26,7 @@ class ReplayBuffer:
                  batch_size     : int,                  # num experiences pulled for each training batch in a sample
                  prime_size     : int,                  # num initial experiences that are considered random priming
                                                         #   data; don't need to be kept once buffer is full
+                 reward_thresh  : float,                # reward value above which is considered a "good" experience
                  prng           : np.random.Generator   # the pseudo-random number generator
                 ):
 
@@ -39,7 +40,9 @@ class ReplayBuffer:
         self.memory = deque(maxlen=buffer_size)  #this is the buffer
         self.batch_size = batch_size
         self.prime_size = prime_size
-        self.experience = namedtuple("Experience", field_names=["state", "action", "reward", "next_state", "done"])
+        self.reward_threshold = reward_thresh
+        self.prng = prng
+
         self.rewards_exceed_threshold = 0
         self.num_primes = 0
 
@@ -50,9 +53,9 @@ class ReplayBuffer:
     def add(self,
              states         : {},           # dict of current states; each entry represents an agent type,
                                             #   which is ndarray[num_agents, x]
-             actions,       : {},           # dict of actions taken; each entry is an agent type, which is 
+             actions        : {},           # dict of actions taken; each entry is an agent type, which is 
                                             #   an ndarray[num_agents, x]
-             rewards,       : {},           # dict of rewards, each entry an agent type, which is a list of floats
+             rewards        : {},           # dict of rewards, each entry an agent type, which is a list of floats
              next_states    : {},           # dict of next states after actions are taken; each entry an agent type
              dones          : {}            # dict of done flags, each entry an agent type, which is a list of bools
            ):
@@ -67,7 +70,7 @@ class ReplayBuffer:
                 if self.rewards_exceed_threshold < self.buffer_size//2:
 
                     # while we have a desirable reward at the left end of the deque
-                    while max(self.memory[0].reward) > REWARD_THRESHOLD:
+                    while max(self.memory[0].reward) > self.reward_threshold:
 
                         # pop it off and push it back onto the right end to save it
                         self.memory.rotate(-1)
@@ -84,11 +87,11 @@ class ReplayBuffer:
 
         else:
             # if the incoming experience has a good reward, then increment the count
-            if get_max(reward) > REWARD_THRESHOLD:
+            if get_max(rewards) > self.reward_threshold:
                 self.rewards_exceed_threshold += 1
     
         # add the experience to the right end of the deque
-        e = self.experience(state, action, reward, next_state, dones)
+        e = Experience(states, actions, rewards, next_states, dones)
         self.memory.append(e)
 
     #------------------------------------------------------------------------------
@@ -118,7 +121,7 @@ class ReplayBuffer:
         if len(self.memory) >= self.batch_size:
 
             # pull a random sample of experiences from the buffer
-            experiences = prng.choice(self.memory, self.batch_size).tolist() #choice returns ndarray
+            experiences = self.prng.choice(self.memory, self.batch_size).tolist() #choice returns ndarray
             if len(experiences) == self.batch_size:
 
                 # Since the internal storage of an experience is in the form of lists and ndarrays,
@@ -142,34 +145,40 @@ class ReplayBuffer:
                 dones = {}
 
                 # loop through each agent type in use (assume all element dicts have the same keys)
-                for agent_type in experiences[0].state:
+                # NOTE: e0 is supposed to be a named tuple, but prng.choice is returning lists instead. So we index
+                #       elements of the list:
+                #           0..state
+                #           1..action
+                #           2..reward
+                #           3..next_state
+                #           4..done
+                e0 = experiences[0]
+                for agent_type in e0[0]:
 
                     # get num agents of this type (assume the same number of agents is represented in each element)
-                    e0 = experiences[0]
-                    num_agents = e0.state[agent_type].shape[0]
-                    print("ReplayBuffer.sample: agent_type = ", agent_type, ", num_agents = ", num_agents)
+                    num_agents = e0[0][agent_type].shape[0]
 
                     # create empty tensors to hold all of the experience data for this agent type
-                    ts = torch.zeros(self.batch_size, num_agents, e0.state[agent_type].shape[1], dtype=torch.float)
-                    ta = torch.zeros(self.batch_size, num_agents, e0.action[agent_type].shape[1], dtype=torch.float)
+                    ts = torch.zeros(self.batch_size, num_agents, e0[0][agent_type].shape[1], dtype=torch.float)
+                    ta = torch.zeros(self.batch_size, num_agents, e0[1][agent_type].shape[1], dtype=torch.float)
                     tr = torch.zeros(self.batch_size, num_agents, 1, dtype=torch.float)
-                    tn = torch.zeros(self.batch_size, num_agents, e0.next_state[agent_type].shape[1], dtype=torch.float)
+                    tn = torch.zeros(self.batch_size, num_agents, e0[3][agent_type].shape[1], dtype=torch.float)
                     td = torch.zeros(self.batch_size, num_agents, 1, dtype=torch.float)
-                    print("                     ts = ", ts.shape)
-                    print("                     ta = ", ta.shape)
-                    print("                     tr = ", tr.shape)
-                    print("                     tn = ", tn.shape)
-                    print("                     td = ", td.shape)
+                    #print("                     ts = ", ts.shape)
+                    #print("                     ta = ", ta.shape)
+                    #print("                     tr = ", tr.shape)
+                    #print("                     tn = ", tn.shape)
+                    #print("                     td = ", td.shape)
 
                     # loop through all the experiences, assigning each to a layer in the output tensor
                     for i, e in enumerate(experiences):
-                        ts[i, :, :] = torch.from_numpy(e.state[agent_type])
-                        ta[i, :, :] = torch.from_numpy(e.action[agent_type])
-                        tn[i, :, :] = torch.from_numpy(e.next_state[agent_type])
+                        ts[i, :, :] = torch.from_numpy(e[0][agent_type])
+                        ta[i, :, :] = torch.from_numpy(e[1][agent_type])
+                        tn[i, :, :] = torch.from_numpy(e[3][agent_type])
 
                         # incoming reward and done are lists, not tensors
-                        tr[i, :, :] = torch.tensor(e.reward[agent_type]).view(num_agents, -1)[:, :]
-                        td[i, :, :] = torch.tensor(e.done[agent_type]).view(num_agents, -1)[:, :]
+                        tr[i, :, :] = torch.tensor(e[2][agent_type]).view(num_agents, -1)[:, :]
+                        td[i, :, :] = torch.tensor(e[4][agent_type]).view(num_agents, -1)[:, :]
 
                     # add these tensors into the output dictionaries
                     states[agent_type] = ts

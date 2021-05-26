@@ -4,6 +4,7 @@
 import numpy as np
 import torch
 import time
+import copy
 from collections    import deque
 from unityagents    import UnityEnvironment
 
@@ -242,10 +243,11 @@ def advance_time_step(model         : AgentMgr,         # manager for all agetns
 
     # Predict the best actions for the current state and store them in a single ndarray
     actions = model.act(states) #returns dict of ndarray, with each entry having one item for each agent
-    print("\nactions = ", actions)
+    #print("\nactions = ", actions)
 
     # get the new state & reward based on this action
-    env_info = env.step(actions)
+    ea = copy.deepcopy(actions) # disposable copy because env.step() changes the elements to lists!
+    env_info = env.step(ea)
     next_states = all_agent_states(env_info, agent_types)
     rewards, dones = all_agent_results(env_info, agent_types)
 

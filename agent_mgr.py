@@ -16,9 +16,15 @@ from unityagents    import UnityEnvironment
 from agent_type     import AgentType
 from agent_models   import AgentModels
 from replay_buffer  import ReplayBuffer
-import utils
+from utils          import get_max
 
 DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+# probability of keeping experiences with bad rewards during replay buffer priming
+BAD_STEP_KEEP_PROB_INIT = 0.1
+
+# experience reward value above which is considered a desirable experience
+REWARD_THRESHOLD = 0.009
 
 
 class AgentMgr:
@@ -31,6 +37,8 @@ class AgentMgr:
                  random_seed    : int = 0,          # seed for the PRNG
                  batch_size     : int = 32,         # number of experiences in a learning batch
                  buffer_size    : int = 100000,     # capacity of the experience replay buffer
+                 buffer_prime   : int = 1000,       # number of experiences to be stored in replay buffer before learning begins
+                 bad_step_prob  : float = 0.1,      # probability of keeping an experience (after buffer priming) with a low reward
                  use_noise      : bool = False,     # should we inject random noise into actions?
                  update_factor  : float = 0.001     # Tau factor for performing soft updates to target NN models
                 ):
@@ -39,6 +47,8 @@ class AgentMgr:
 
         self.batch_size = batch_size
         self.buffer_size = buffer_size
+        self.buffer_prime_size = buffer_prime
+        self.bad_step_keep_prob = bad_step_prob
         self.use_noise = use_noise
         self.tau = update_factor
         
@@ -66,7 +76,7 @@ class AgentMgr:
         self.learn_every = 1            #number of time steps between learning events
 
         # define simple experience replay buffer common to all agents
-        self.erb = ReplayBuffer(buffer_size, batch_size, buffer_prime_size, self.prng)
+        self.erb = ReplayBuffer(buffer_size, batch_size, buffer_prime, REWARD_THRESHOLD, self.prng)
 
     #------------------------------------------------------------------------------
 
@@ -94,7 +104,7 @@ class AgentMgr:
     """Computes the next actions for all agents, given the current state info.
 
         Return is a dict of actions, one entry for each agent type.  Each ndarray contains one entry for each 
-        agent of that type.
+        agent of that type, with the shape [num_agents, 1].
     """
 
     def act(self, 
@@ -108,29 +118,30 @@ class AgentMgr:
 
         if self.learning_underway  or  is_inference:
             for t in self.agent_types:
-                actions = np.array((1, t.num_agents), dtype=int) #one element for each agent of this type
-                t.actor_policy.eval()
+                at = self.agent_types[t]
+                actions = np.empty((at.num_agents, 1), dtype=int) #one element for each agent of this type
+                at.actor_policy.eval()
 
-                for i in range(t.num_agents):
+                for i in range(at.num_agents):
 
                     # get the action for this agent
                     s = torch.from_numpy(states[t][i]).float().to(DEVICE)
                     with torch.no_grad():
-                        actions[i] = t.actor_policy(s).cpu().data.numpy()
+                        actions[i] = at.actor_policy(s).cpu().data.numpy()
 
                     # add noise if appropriate
                     if add_noise:
                         pass
 
-                t.actor_policy.train()
+                at.actor_policy.train()
 
-            act[t] = actions
+                act[t] = actions
 
         else: # must be priming the replay buffer
             for t in self.agent_types:
-                actions = np.array((1, t.num_agents), dtype=int)
-                actions = self.prng.integers(0, t.max_action_val, t.num_agents, dtype=int, endpoint=False)
-            act[t] = actions
+                at = self.agent_types[t]
+                actions = self.prng.integers(0, at.max_action_val, at.num_agents)
+                act[t] = np.expand_dims(np.array(actions, dtype=float), 1) #make it a 2D array
 
         return act
 
@@ -155,14 +166,14 @@ class AgentMgr:
         # set up probability of keeping bad experiences based upon whether the buffer is
         # full enough to start learning
         if len(self.erb) > max(self.batch_size, self.buffer_prime_size):
-            threshold = self.bad_step_keep_prob
+            random_threshold = self.bad_step_keep_prob
             self.learning_underway = True
         else:
-            threshold = BAD_STEP_KEEP_PROB_INIT
+            random_threshold = BAD_STEP_KEEP_PROB_INIT
 
         # if this step got some reward then keep it;
         # if it did not score any points, then use random draw to decide if it's a keeper
-        if get_max(rewards) > 0.0  or  self.prng.random() < threshold:
+        if get_max(rewards) > REWARD_THRESHOLD  or  self.prng.random() < random_threshold:
             self.erb.add(states, actions, rewards, next_states, dones)
 
         # initiate learning on each agent, but only every N time steps
@@ -222,8 +233,9 @@ class AgentMgr:
         num_states_all = 0
         num_actions_all = 0
         for t in self.agent_types:
-            num_states_all += t.state_size * t.num_agents
-            num_actions_all += 1 * t.num_agents #for now we only define 1 enumerated action per agent
+            at = self.agent_types[t]
+            num_states_all += at.state_size * at.num_agents
+            num_actions_all += 1 * at.num_agents #for now we only define 1 enumerated action per agent
         
         # create tensors to hold states, actions and next_states for all agents where all agents are
         # represented in a single row (each row is an experience in the training batch) so size is [b, x]
@@ -248,23 +260,24 @@ class AgentMgr:
         # need to do this for all agents before updating the critics, since critics see all
         first = True
         for t in self.agent_types:
-            for agent in range(t.num_agents):
+            at = self.agent_types[t]
+            for agent in range(at.num_agents):
 
                 # grab next state vectors and use this agent's target network to predict next actions
                 ns = next_states[t][:, agent, :]
-                ta = t.actor_target(ns)
+                ta = at.actor_target(ns)
 
                 # grab current state vector and us this agent's current policy to decide current actions
                 cs = states[t][:, agent, :]
-                ca = t.actor_policy(cs)
+                ca = at.actor_policy(cs)
 
                 if first:
                     target_actions = ta.to(DEVICE)
                     cur_actions = ca.to(DEVICE)
                     first = False
                 else:
-                    target_actions = tensor.cat((target_actions, ta), dim=1)
-                    cur_actions = tensor.cat((cur_actions, ca), dim=1)
+                    target_actions = torch.cat((target_actions, ta), dim=1)
+                    cur_actions = torch.cat((cur_actions, ca), dim=1)
                 
                 # resulting target_actions and cur_actions tensors are of shape [b, z], where z is the
                 # sum of all agents' action spaces (all agents are represented in a single row)
