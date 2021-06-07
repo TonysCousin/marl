@@ -14,7 +14,7 @@ def test_default():
     agent_models.add_actor_critic("GoalieBrain", GoalieActor(336, 1), GoalieCritic(1344, 4))
     agent_models.add_actor_critic("StrikerBrain", StrikerActor(336, 1), StrikerCritic(1344, 4))
 
-    mgr = AgentMgr(env, agent_models, batch_size=2, buffer_prime=3)
+    mgr = AgentMgr(env, agent_models, batch_size=3, buffer_prime=4)
     print("Haltus")
 
     train(mgr, env)

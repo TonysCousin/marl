@@ -40,6 +40,7 @@ class AgentMgr:
                  buffer_prime   : int = 1000,       # number of experiences to be stored in replay buffer before learning begins
                  bad_step_prob  : float = 0.1,      # probability of keeping an experience (after buffer priming) with a low reward
                  use_noise      : bool = False,     # should we inject random noise into actions?
+                 discount_factor: float = 0.99,     # Gamma factor for discounting future time step results
                  update_factor  : float = 0.001     # Tau factor for performing soft updates to target NN models
                 ):
 
@@ -50,6 +51,7 @@ class AgentMgr:
         self.buffer_prime_size = buffer_prime
         self.bad_step_keep_prob = bad_step_prob
         self.use_noise = use_noise
+        self.gamma = discount_factor
         self.tau = update_factor
         
         # store the info for each type of ageint in use
@@ -238,12 +240,13 @@ class AgentMgr:
             num_actions_all += 1 * at.num_agents #for now we only define 1 enumerated action per agent
         
         # create tensors to hold states, actions and next_states for all agents where all agents are
-        # represented in a single row (each row is an experience in the training batch) so size is [b, x]
+        # represented in a single row (each row is an experience in the training batch) so size is [b, x].
         first = True
         for t in self.agent_types:
             s = states[t].view(self.batch_size, -1)
             a = actions[t].view(self.batch_size, -1)
             n = next_states[t].view(self.batch_size, -1)
+
             if first:
                 states_all = s.to(DEVICE)
                 actions_all = a.to(DEVICE)
@@ -254,6 +257,7 @@ class AgentMgr:
                 states_all = torch.cat((states_all, s), dim=1)
                 actions_all = torch.cat((actions_all, a), dim=1)
                 next_states_all = torch.cat((next_states_all, n), dim=1)
+
 
         #.........Use the current actor NNs to get possible action values
 
@@ -267,7 +271,7 @@ class AgentMgr:
                 ns = next_states[t][:, agent, :]
                 ta = at.actor_target(ns)
 
-                # grab current state vector and us this agent's current policy to decide current actions
+                # grab current state vector and use this agent's current policy to decide current actions
                 cs = states[t][:, agent, :]
                 ca = at.actor_policy(cs)
 
@@ -280,17 +284,53 @@ class AgentMgr:
                     cur_actions = torch.cat((cur_actions, ca), dim=1)
                 
                 # resulting target_actions and cur_actions tensors are of shape [b, z], where z is the
-                # sum of all agents' action spaces (all agents are represented in a single row)
+                # sum of all agents' action spaces for that agent type (all agents are represented in a single row)
 
         #.........Update the critic NNs based on learning losses
 
-        print("///// DIDN'T FINISH WRITING learn()!")
+        for t in self.agent_types:
+            at = self.agent_types[t]
+
+            # compute the Q values for the next states/actions from the target model for this type
+            q_targets_next = at.critic_target(next_states_all, target_actions).squeeze()
+
+            # prepare the rewards & dones for the agent type
+            r = rewards[t].squeeze().to(DEVICE)
+            d = dones[t].squeeze().to(DEVICE)
+
+            for agent in range(at.num_agents):
+
+                # Compute Q targets for current states (y_i) for this agent
+                q_targets = r[:, agent] + self.gamma*q_targets_next*(1.0 - d[:, agent])
+
+                # use the current policy to compute the expected Q value for current states & actions
+                q_expected = at.critic_policy(states_all, actions_all).squeeze()
+
+                # use the current policy to compute the critic loss for this agent
+                critic_loss = F.mse_loss(q_expected, q_targets.detach())
+
+                # minimize the loss
+                at.critic_opt.zero_grad()
+                critic_loss.backward()
+                torch.nn.utils.clip_grad_norm_(at.critic_policy.parameters(), 1.0)
+                at.critic_opt.step()
 
         #.........Update the actor NNs based on learning losses
+
+        for t in self.agent_types:
+            at = self.agent_types[t]
 
 
         #.........Update the target NNs for both critics & actors
 
+
+
+
+
+
+
+
+        print("///// DIDN'T FINISH WRITING learn()!")
 
 
 
