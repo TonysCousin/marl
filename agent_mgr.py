@@ -11,6 +11,7 @@
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from unityagents    import UnityEnvironment
 from agent_type     import AgentType
@@ -234,10 +235,12 @@ class AgentMgr:
         # find the total numbers of states & actions across all agents
         num_states_all = 0
         num_actions_all = 0
+        num_agents_all = 0
         for t in self.agent_types:
             at = self.agent_types[t]
             num_states_all += at.state_size * at.num_agents
             num_actions_all += 1 * at.num_agents #for now we only define 1 enumerated action per agent
+            num_agents_all += at.num_agents
         
         # create tensors to hold states, actions and next_states for all agents where all agents are
         # represented in a single row (each row is an experience in the training batch) so size is [b, x].
@@ -317,9 +320,23 @@ class AgentMgr:
 
         #.........Update the actor NNs based on learning losses
 
+        total_agents_updated = 0 #since each type may have a different number of agents
         for t in self.agent_types:
             at = self.agent_types[t]
 
+            for agent in range(at.num_agents):
+
+                # compute the actor loss
+                actor_loss = -at.critic_policy(states_all, cur_actions).mean()
+
+                # minimize the loss
+                retain = total_agents_updated + agent < num_agents_all - 1 #retain graph for all but the final agent
+                at.actor_opt.zero_grad()
+                actor_loss.backward(retain_graph=retain)
+                torch.nn.utils.clip_grad_norm_(at.actor_policy.parameters(), 1.0)
+                at.actor_opt.step()
+
+            total_agents_updated += at.num_agents
 
         #.........Update the target NNs for both critics & actors
 
@@ -330,7 +347,7 @@ class AgentMgr:
 
 
 
-        print("///// DIDN'T FINISH WRITING learn()!")
+        print("\n///// DIDN'T FINISH WRITING learn()!")
 
 
 
