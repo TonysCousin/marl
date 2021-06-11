@@ -117,7 +117,7 @@ def train(mgr               : AgentMgr,         # manages all agents and their l
             avg_score = np.mean(recent_scores)
         max_recent = np.max(recent_scores)
         avg_scores.append(avg_score)
-        mem_stats = mgr.get_memory_stats() #element 0 is total size, 1 is num good experiences
+        mem_stats = mgr.get_erb_stats() #element 0 is total size, 1 is num good experiences
         mem_pct = 0.0
         if mem_stats[0] > 0:
             mem_pct = min(100.0*float(mem_stats[1])/mem_stats[0], 99.9)
@@ -219,9 +219,6 @@ def max_rewards(types: {},  # dict of AgentType describing all agent types
         if mr > reward:
             reward = mr
     
-    #TODO: debug
-    print("max_rewards returning ", reward, ". All elements = ", rewards)
-
     return reward
 
 #------------------------------------------------------------------------------

@@ -1,8 +1,8 @@
 """ ReplayBuffer class provides a fixed-size replay buffer (without true priority) for randomly sampling past
     experiences. However, it recognizes experiences with large rewards as valuable,
-    so will retain them when they have hit the left end of the queue.
-    Assumes that the initial experiences added (until batch_size is reached) will be
-    random garbage to prime the buffer, and will allow these primes to be pushed off the
+    so will retain them when they have hit the left end of the queue and the queue is full.
+    Assumes that the initial experiences added (until prime_size is reached) will be
+    random content to prime the buffer, and will allow these primes to be pushed off the
     end, regardless of whether they have a good reward, and will not count them when
     reporting "good" experiences.
 """

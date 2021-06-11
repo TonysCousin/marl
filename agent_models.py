@@ -9,7 +9,7 @@ import torch.nn as nn
 class AgentModels:
 
     def __init__(self):
-        self.models = {}    # dict of tuples, where each tuple contains an actor network, a critic network, and other info for one agent type
+        self.models = {}    # dict of tuples, where each tuple contains an actor network, a critic network, and optimizer info for one agent type
     
 
 #------------------------------------------------------------------------------

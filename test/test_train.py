@@ -11,13 +11,13 @@ def test_default():
 
     # define some bogus NNs for now, just to get the thing to execute
     agent_models = AgentModels()
-    agent_models.add_actor_critic("GoalieBrain", GoalieActor(336, 1), GoalieCritic(1344, 4))
-    agent_models.add_actor_critic("StrikerBrain", StrikerActor(336, 1), StrikerCritic(1344, 4))
+    agent_models.add_actor_critic("GoalieBrain", GoalieActor(336, 1, fc1_units=512), GoalieCritic(1344, 4, fcs1_units=2048, fc2_units=256))
+    agent_models.add_actor_critic("StrikerBrain", StrikerActor(336, 1, fc1_units=512), StrikerCritic(1344, 4, fcs1_units=2048, fc2_units=256))
 
-    mgr = AgentMgr(env, agent_models, batch_size=3, buffer_prime=4)
+    mgr = AgentMgr(env, agent_models, batch_size=32, buffer_prime=50)
     print("Haltus")
 
-    train(mgr, env)
+    train(mgr, env, max_episodes=10, chkpt_interval=1)
 
 test_default()
 

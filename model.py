@@ -12,9 +12,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-#TODO: code elsewhere will need to create an AgentModels object, populate it with these models,
-#      then pass that object to the AgentMgr.
-
 #------------------------------------------------------------------------------
 
 """Returns a tuple with the range of values desired for initialization of the hidden layer params."""
@@ -24,15 +21,6 @@ def hidden_init(layer):
     fan_in = layer.weight.data.size()[0]
     lim = 1. / np.sqrt(fan_in)
     return (-lim, lim)
-
-
-
-
-#TODO: JOHN THIS IS OLD CODE FROM CLASS - only using for early interface testing here.
-
-
-
-
 
 #------------------------------------------------------------------------------
 

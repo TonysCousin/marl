@@ -78,6 +78,16 @@ class AgentMgr:
         self.learn_control = 0          #num time steps between learning events
         self.learn_every = 1            #number of time steps between learning events
 
+        # find the total numbers of states & actions across all agents
+        self.num_states_all = 0
+        self.num_actions_all = 0
+        self.num_agents_all = 0
+        for t in self.agent_types:
+            at = self.agent_types[t]
+            self.num_states_all += at.state_size * at.num_agents
+            self.num_actions_all += 1 * at.num_agents #for now we only define 1 enumerated action per agent
+            self.num_agents_all += at.num_agents
+        
         # define simple experience replay buffer common to all agents
         self.erb = ReplayBuffer(buffer_size, batch_size, buffer_prime, REWARD_THRESHOLD, self.prng)
 
@@ -232,21 +242,11 @@ class AgentMgr:
         # extract the elements of the replayed batch of experiences
         states, actions, rewards, next_states, dones = experiences
 
-        # find the total numbers of states & actions across all agents
-        num_states_all = 0
-        num_actions_all = 0
-        num_agents_all = 0
-        for t in self.agent_types:
-            at = self.agent_types[t]
-            num_states_all += at.state_size * at.num_agents
-            num_actions_all += 1 * at.num_agents #for now we only define 1 enumerated action per agent
-            num_agents_all += at.num_agents
-        
         # create tensors to hold states, actions and next_states for all agents where all agents are
         # represented in a single row (each row is an experience in the training batch) so size is [b, x].
         first = True
         for t in self.agent_types:
-            s = states[t].view(self.batch_size, -1)
+            s = states[t].view(self.batch_size, -1) #puts all agents of this type onto one row
             a = actions[t].view(self.batch_size, -1)
             n = next_states[t].view(self.batch_size, -1)
 
@@ -330,7 +330,7 @@ class AgentMgr:
                 actor_loss = -at.critic_policy(states_all, cur_actions).mean()
 
                 # minimize the loss
-                retain = total_agents_updated + agent < num_agents_all - 1 #retain graph for all but the final agent
+                retain = total_agents_updated + agent < self.num_agents_all - 1 #retain graph for all but the final agent
                 at.actor_opt.zero_grad()
                 actor_loss.backward(retain_graph=retain)
                 torch.nn.utils.clip_grad_norm_(at.actor_policy.parameters(), 1.0)
@@ -367,9 +367,9 @@ class AgentMgr:
     """
 
     def save_checkpoint(self, 
-                        path    : string = None,   # directory where the files will go (if not None, needs to end in /)
-                        name    : string = "ZZ",   # arbitrary name for the test, run, etc.
-                        episode : int    = 0       # learning episode that this checkpoint represents
+                        path    : str = None,   # directory where the files will go (if not None, needs to end in /)
+                        name    : str = "ZZ",   # arbitrary name for the test, run, etc.
+                        episode : int    = 0    # learning episode that this checkpoint represents
                        ):
 
         checkpoint = {}
@@ -377,14 +377,14 @@ class AgentMgr:
 
         for t in self.agent_types:
             at = self.agent_types[t]
-                key_a = "actor-{}".format(t)
-                key_oa = "opt_actor-{}".format(t)
-                checkpoint[key_a] = at.actor_policy.state_dict()
-                checkpoint[key_oa] = at.actor_opt.state_dict()
-                key_c = "critic-{}".format(t)
-                key_oc = "opt_critic-{}".format(t)
-                checkpoint[key_c] = at.critic_policy.state_dict()
-                checkpoint[key_oc] = at.critic_opt.state_dict()
+            key_a = "actor-{}".format(t)
+            key_oa = "opt_actor-{}".format(t)
+            checkpoint[key_a] = at.actor_policy.state_dict()
+            checkpoint[key_oa] = at.actor_opt.state_dict()
+            key_c = "critic-{}".format(t)
+            key_oc = "opt_critic-{}".format(t)
+            checkpoint[key_c] = at.critic_policy.state_dict()
+            checkpoint[key_oc] = at.critic_opt.state_dict()
 
         filename = "{}{}_{}.pt".format(path, name, episode)
         torch.save(checkpoint, filename)
