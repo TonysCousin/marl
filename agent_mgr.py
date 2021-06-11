@@ -320,7 +320,7 @@ class AgentMgr:
 
         #.........Update the actor NNs based on learning losses
 
-        total_agents_updated = 0 #since each type may have a different number of agents
+        total_agents_updated = 0 #count per loop instead of enumerate, since each type may have a different number of agents
         for t in self.agent_types:
             at = self.agent_types[t]
 
@@ -340,25 +340,59 @@ class AgentMgr:
 
         #.........Update the target NNs for both critics & actors
 
+        for t in self.agent_types:
+            at = self.agent_types[t]
 
-
-
-
-
-
-
-        print("\n///// DIDN'T FINISH WRITING learn()!")
-
-
-
-
-
+            # perform a soft update on the critic & actor target NNs for each agent type
+            self.soft_update(at.critic_policy, at.critic_target)
+            self.soft_update(at.actor_policy, at.actor_target)
 
     #------------------------------------------------------------------------------
 
+    """Stores a checkpoint file with all intermediate info for the NNs and optimizers.
 
-    def save_checkpoint(self, path, name, episode):
-        pass #TODO: dummy
+        Return: none
+
+        There is no replay buffer stored. Checkpoints are saved as a single file for
+        the entire model, which is structured as a dictionary containing the following
+        fields:
+            version
+            actor-*
+            opt_actor-*
+            critic-*
+            opt_critic-*
+        where the * represents the names of each agent type in use (there are four fields
+        specific to each agent type). Each field except "version" holds a state_dict.
+        Version is a string.
+    """
+
+    def save_checkpoint(self, 
+                        path    : string = None,   # directory where the files will go (if not None, needs to end in /)
+                        name    : string = "ZZ",   # arbitrary name for the test, run, etc.
+                        episode : int    = 0       # learning episode that this checkpoint represents
+                       ):
+
+        checkpoint = {}
+        checkpoint["version"] = "marl1"
+
+        for t in self.agent_types:
+            at = self.agent_types[t]
+                key_a = "actor-{}".format(t)
+                key_oa = "opt_actor-{}".format(t)
+                checkpoint[key_a] = at.actor_policy.state_dict()
+                checkpoint[key_oa] = at.actor_opt.state_dict()
+                key_c = "critic-{}".format(t)
+                key_oc = "opt_critic-{}".format(t)
+                checkpoint[key_c] = at.critic_policy.state_dict()
+                checkpoint[key_oc] = at.critic_opt.state_dict()
+
+        filename = "{}{}_{}.pt".format(path, name, episode)
+        torch.save(checkpoint, filename)
+
+    #------------------------------------------------------------------------------
+
+    def restore_checkpoint(self, path, name, episode):
+        print("\n///// restore_checkpoint is not yet implemented!\n") #TODO - flesh out
 
     #------------------------------------------------------------------------------
 
