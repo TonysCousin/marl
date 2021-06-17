@@ -110,6 +110,7 @@ class AgentMgr:
     """Performs any resets that are necessary when a new episode is to begin."""
 
     def reset(self):
+
         pass #Nothing needed at this time
 
     #------------------------------------------------------------------------------

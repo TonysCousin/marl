@@ -14,7 +14,7 @@ from agent_mgr      import AgentMgr
 AVG_SCORE_EXTENT = 100 # number of episodes over which running average scores are computed
 CHECKPOINT_PATH = "checkpoint/" # can be empty string, but if a dir is named, needs trailing '/'
 ABORT_EPISODE = 400 # num episodes after which training will abort if insignificant learning is detected
-PRIME_FEEDBACK_INTERVAL = 4000 # num time steps between visual feedback of priming progress
+PRIME_FEEDBACK_INTERVAL = 500 # num time steps between visual feedback of priming progress
 
 
 """Trains a set of DRL agents in a Unity ML-Agents environment.
@@ -113,7 +113,7 @@ def train(mgr               : AgentMgr,         # manages all agents and their l
         # don't compute avg score until several episodes have completed to avoid a meaningless
         # spike in the average near the very beginning
         avg_score = 0.0
-        if ep > 50:
+        if ep > 30:
             avg_score = np.mean(recent_scores)
         max_recent = np.max(recent_scores)
         avg_scores.append(avg_score)
@@ -198,10 +198,6 @@ def any_dones(types : {},   # dict of AgentType describing all agent types
     result = False
     for t in types:
         result |= any(dones[t])
-
-    #TODO: debug
-    if result:
-        print("any_dones is true! ", dones)
 
     return result
 
