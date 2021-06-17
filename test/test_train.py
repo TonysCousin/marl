@@ -9,7 +9,7 @@ from model          import GoalieActor, GoalieCritic, StrikerActor, StrikerCriti
 
 #----------------------------------------------------------------------
 
-NAME        = "TRAIN0"
+NAME        = "TRAIN1"
 BATCH       = 128
 PRIME       = 2000  #num random experiences added to the replay buffer before training begins
 SEED        = 0

@@ -78,8 +78,12 @@ def train(mgr               : AgentMgr,         # manages all agents and their l
         mgr.reset()
         score = 0 # total score for this episode
 
+        print("\n\n/////Begin episode ", ep, "/////\n")
+
         # loop over time steps
         for i in range(max_time_steps):
+
+            print("\n\nTime step ", i, ". states =\n", states)
 
             # advance the MADDPG model and its environment by one time step
             states, rewards, dones = advance_time_step(mgr, env, agent_types, states)
@@ -147,12 +151,14 @@ def train(mgr               : AgentMgr,         # manages all agents and their l
         # if this solution is clearly going nowhere, then abort early
         if ep > starting_episode + ABORT_EPISODE:
             hit_rate = float(mem_stats[1]) / ep
-            if hit_rate < 0.01  or  (rem_time > 1.0  and  hit_rate < 0.05):
+            if hit_rate < 0.01  or  (rem_time > 2.0  and  hit_rate < 0.04):
                 print("\n* Aborting due to inadequate progress.")
                 break
 
-    print("\nAvg/max time steps/episode = {:.1f}/{:d}"
-          .format(float(sum_steps)/float(max_episodes-starting_episode), max_steps_experienced))
+    # in games that normally terminate with a done flag, it makes sense to see how quickly that flag
+    # is raised; this doesn't make sense in games where the episode normally times out (hits max steps)
+    #print("\nAvg/max time steps/episode = {:.1f}/{:d}"
+    #      .format(float(sum_steps)/float(max_episodes-starting_episode), max_steps_experienced))
     return (scores, avg_scores)
 
 #------------------------------------------------------------------------------
