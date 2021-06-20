@@ -1,33 +1,33 @@
 import numpy as np
 
-class RandomSampler():
-    """
-    Serves up random combinations of hyperparameters from defined sets or ranges of values
-    to explore.
-    """
+"""
+Serves up random combinations of hyperparameters from defined sets or ranges of values
+to explore.
+"""
     
-    def __init__(self, vars):
-        """Accepts definition of the set of variables to be sampled.
-            
-            Params:
-                vars (list of lists): each item is a list containing:
-                                        item 0 - either 'discrete', 'continuous-int' or 'continuous-float'
-                                        items 1-N depend on the value of item 0:
-                                        if discrete, then these are the set of values to be chosen from
-                                        if continuous then these are the min & max bounds of the range
-        """
+class RandomSampler():
+    """Accepts definition of the set of variables to be sampled.
         
+        Params:
+            vars (list of lists): each item is a list containing:
+                                    item 0 - either 'discrete', 'continuous-int' or 'continuous-float'
+                                    items 1-N depend on the value of item 0:
+                                    if discrete, then these are the set of values to be chosen from
+                                    if continuous then these are the min & max (exclusive) bounds of the range
+    """
+        
+    def __init__(self, vars):
         self.vars = vars
         
         self.rng = np.random.default_rng()
     
     
-    def sample(self):
-        """Draws a random sample (uniform distribution) of all variables at its disposal.
-        
-            Returns a list of values in the order of definition.
-        """
+    """Draws a random sample (uniform distribution) of all variables at its disposal.
+    
+        Returns a list of values in the order of definition.
+    """
 
+    def sample(self):
         rtn = []
         for v in self.vars:
             if v[0] == "discrete":

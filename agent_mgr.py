@@ -56,6 +56,7 @@ class AgentMgr:
         self.use_noise = use_noise
         self.noise_decay = noise_decay
         self.noise_level = noise_init
+        self.noise_reported = False #has decay threshold been met and reported to user?
         self.gamma = discount_factor
         self.tau = update_factor
         
@@ -158,6 +159,9 @@ class AgentMgr:
 
                 # reduce the noise probability
                 self.noise_level *= self.noise_decay
+                if self.noise_level <= 0.1  and  not self.noise_reported:
+                    print("\n* Noise decayed to 0.1")
+                    self.noise_reported = True
 
         else: # must be priming the replay buffer
             for t in self.agent_types:

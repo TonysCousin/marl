@@ -5,6 +5,7 @@ import numpy as np
 import torch
 import time
 import copy
+import sys
 from collections    import deque
 from unityagents    import UnityEnvironment
 
@@ -13,8 +14,8 @@ from agent_mgr      import AgentMgr
 
 AVG_SCORE_EXTENT = 100 # number of episodes over which running average scores are computed
 CHECKPOINT_PATH = "checkpoint/" # can be empty string, but if a dir is named, needs trailing '/'
-ABORT_EPISODE = 400 # num episodes after which training will abort if insignificant learning is detected
-PRIME_FEEDBACK_INTERVAL = 500 # num time steps between visual feedback of priming progress
+ABORT_EPISODE = 1000 # num episodes after which training will abort if insignificant learning is detected
+PRIME_FEEDBACK_INTERVAL = 2000 # num time steps between visual feedback of priming progress
 
 
 """Trains a set of DRL agents in a Unity ML-Agents environment.
@@ -62,6 +63,7 @@ def train(mgr               : AgentMgr,         # manages all agents and their l
         states, rewards, dones = advance_time_step(mgr, env, agent_types, states)
         if pc % PRIME_FEEDBACK_INTERVAL == 0:
             print(".", end="")
+            sys.stdout.flush()
         pc += 1
         if any_dones(agent_types, dones): # if episode ends just keep going
             env_info = env.reset(train_mode=True)
