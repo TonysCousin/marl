@@ -41,6 +41,8 @@ class AgentMgr:
                  buffer_prime   : int = 1000,       # number of experiences to be stored in replay buffer before learning begins
                  bad_step_prob  : float = 0.1,      # probability of keeping an experience (after buffer priming) with a low reward
                  use_noise      : bool = False,     # should we inject random noise into actions?
+                 noise_init     : float = 1.0,      # initial probability of noise being added if it is turned on
+                 noise_decay    : float = 0.9999,   # the amount the noise probability will be reduced after each experience
                  discount_factor: float = 0.99,     # Gamma factor for discounting future time step results
                  update_factor  : float = 0.001     # Tau factor for performing soft updates to target NN models
                 ):
@@ -52,6 +54,8 @@ class AgentMgr:
         self.buffer_prime_size = buffer_prime
         self.bad_step_keep_prob = bad_step_prob
         self.use_noise = use_noise
+        self.noise_decay = noise_decay
+        self.noise_level = noise_init
         self.gamma = discount_factor
         self.tau = update_factor
         
@@ -138,18 +142,22 @@ class AgentMgr:
 
                 for i in range(at.num_agents):
 
-                    # get the action for this agent
+                    # add noise if appropriate by selecting a random action
+                    if add_noise:
+                        if self.prng.random() < self.noise_level:
+                            actions[i] = self.prng.integers(0, at.max_action_val)
+
+                    # else get the action for this agent
                     s = torch.from_numpy(states[t][i]).float().to(DEVICE)
                     with torch.no_grad():
-                        actions[i] = at.actor_policy(s).cpu().data.numpy()
-
-                    # add noise if appropriate
-                    if add_noise:
-                        pass
+                        actions[i] = at.actor_policy(s)
 
                 at.actor_policy.train()
 
-                act[t] = actions
+                act[t] = actions.cpu().data.numpy()
+
+                # reduce the noise probability
+                self.noise_level *= self.noise_decay
 
         else: # must be priming the replay buffer
             for t in self.agent_types:
@@ -161,11 +169,11 @@ class AgentMgr:
 
     #------------------------------------------------------------------------------
 
-        """Stores a new experience from the environment in replay buffer, if appropriate,
-           and advances the agents by one time step.
+    """Stores a new experience from the environment in replay buffer, if appropriate,
+        and advances the agents by one time step.
 
-           Return:  none
-        """
+        Return:  none
+    """
 
     def step(self, 
              states         : {},           # dict of current states; each entry represents an agent type,
@@ -392,8 +400,32 @@ class AgentMgr:
 
     #------------------------------------------------------------------------------
 
-    def restore_checkpoint(self, path, name, episode):
-        print("\n///// restore_checkpoint is not yet implemented!\n") #TODO - flesh out
+    """Retrieves a checkpoint file and loads its data to initialize both actor & critic policy NNs
+        and optimizer parameters for all agent types.  Checkpoint structures are as defined above
+        in the description for save_checkpoint().
+    """
+
+    def restore_checkpoint(self, 
+                           path     : str,   # directory path where the checkpoint file is stored (if not None, must end in /)
+                           name     : str,   # a unique name for the training run
+                           episode  : int    # the training episode number at which the checkpoint was stored
+                          ):
+
+        filename = "{}{}_{}.pt".format(path, name, episode)
+        checkpoint = torch.load(filename)
+
+        for t in self.agent_types:
+            at = self.agent_types[t]
+            key_a = "actor-{}".format(t)
+            key_oa = "opt_actor-{}".format(t)
+            at.actor_policy.load_state_dict(checkpoint[key_a])
+            at.actor_opt.load_state_dict(checkpoint[key_oa])
+            key_c = "critic-{}".format(t)
+            key_oc = "opt_critic-{}".format(t)
+            at.critic_policy.load_state_dict(checkpoint[key_c])
+            at.critic_opt.load_state_dict(checkpoint[key_oc])
+
+        print("Checkpoint loaded for {}, episode {}".format(name, episode))
 
     #------------------------------------------------------------------------------
 

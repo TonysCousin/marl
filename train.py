@@ -78,12 +78,12 @@ def train(mgr               : AgentMgr,         # manages all agents and their l
         mgr.reset()
         score = 0 # total score for this episode
 
-        print("\n\n/////Begin episode ", ep, "/////\n")
+        #print("\n\n/////Begin episode ", ep, "/////\n")
 
         # loop over time steps
         for i in range(max_time_steps):
 
-            print("\n\nTime step ", i, ". states =\n", states)
+            #print("\n\nTime step ", i, ". states =\n", states)
 
             # advance the MADDPG model and its environment by one time step
             states, rewards, dones = advance_time_step(mgr, env, agent_types, states)
