@@ -150,11 +150,11 @@ class AgentMgr:
                     # else get the action for this agent
                     s = torch.from_numpy(states[t][i]).float().to(DEVICE)
                     with torch.no_grad():
-                        actions[i] = at.actor_policy(s)
+                        actions[i] = at.actor_policy(s).cpu().data.numpy()
 
                 at.actor_policy.train()
 
-                act[t] = actions.cpu().data.numpy()
+                act[t] = actions
 
                 # reduce the noise probability
                 self.noise_level *= self.noise_decay
