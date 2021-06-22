@@ -6,6 +6,7 @@ import torch
 import time
 import copy
 import sys
+import time
 from collections    import deque
 from unityagents    import UnityEnvironment
 
@@ -68,7 +69,9 @@ def train(mgr               : AgentMgr,         # manages all agents and their l
         if any_dones(agent_types, dones): # if episode ends just keep going
             env_info = env.reset(train_mode=True)
             states = all_agent_states(env_info, agent_types)
-    print("!\n")
+
+    timestamp = time.strftime("%a %H:%M")
+    print("!\nTraining underway at {}".format(timestamp))
 
     # loop on episodes for training
     start_time = time.perf_counter()
@@ -112,6 +115,9 @@ def train(mgr               : AgentMgr,         # manages all agents and their l
         else:
             avg_duration = 1.0 # avoids divide-by-zero
             time_est_msg = "???"
+        
+        # generate a timestamp for reporting purposes
+        timestamp = time.strftime("%a %H:%M")
 
         # update score bookkeeping, report status
         scores.append(score)
@@ -127,14 +133,14 @@ def train(mgr               : AgentMgr,         # manages all agents and their l
         mem_pct = 0.0
         if mem_stats[0] > 0:
             mem_pct = min(100.0*float(mem_stats[1])/mem_stats[0], 99.9)
-        print("\r{}\tRunning avg/max: {:.3f}/{:.3f},  mem: {:6d}/{:6d} ({:4.1f}%), avg {:.1f} eps/min   "
-              .format(ep, avg_score, max_recent, mem_stats[0], mem_stats[1], mem_pct, 1.0/avg_duration), end="")
+        print("\r{} {}\tRunning avg/max: {:.3f}/{:.3f},  mem: {:6d}/{:6d} ({:4.1f}%), avg {:.1f} eps/min   "
+              .format(timestamp, ep, avg_score, max_recent, mem_stats[0], mem_stats[1], mem_pct, 1.0/avg_duration), end="")
         
         # save a checkpoint at planned intervals and print summary performance stats
         if ep > 0  and  ep % chkpt_interval == 0:
             mgr.save_checkpoint(CHECKPOINT_PATH, run_name, ep)
-            print("\r{}\tAverage score:   {:.3f},        mem: {:6d}/{:6d} ({:4.1f}%), avg {:.1f} eps/min; {}   "
-                  .format(ep, avg_score, mem_stats[0], mem_stats[1], mem_pct, 1.0/avg_duration, time_est_msg))
+            print("\r{} {}\tAverage score:   {:.3f},        mem: {:6d}/{:6d} ({:4.1f}%), avg {:.1f} eps/min; {}   "
+                  .format(timestamp, ep, avg_score, mem_stats[0], mem_stats[1], mem_pct, 1.0/avg_duration, time_est_msg))
 
         # if sleeping is chosen, then pause for viewing after selected episodes
         if sleeping:
@@ -251,6 +257,7 @@ def advance_time_step(model         : AgentMgr,         # manager for all agetns
     env_info = env.step(ea)
     next_states = all_agent_states(env_info, agent_types)
     rewards, dones = all_agent_results(env_info, agent_types)
+    #print("\nRewards = ", rewards)
 
     # update the agents with this new info
     model.step(states, actions, rewards, next_states, dones) 

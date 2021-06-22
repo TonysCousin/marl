@@ -15,10 +15,10 @@ from random_sampler import RandomSampler
 
 #----------------------------------------------------------------------
 
-NAME        = "TRAIN3" #3
+NAME        = "REWARDS" #3
 NUM_RUNS    = 10
 CHKPT_EVERY = 500
-PRIME       = 2000  #num random experiences added to the replay buffer before training begins
+PRIME       = 2  #num random experiences added to the replay buffer before training begins
 SEED        = 111   #0, 111, 468, 5555, 23100, 44939
 GOAL        = 0.9   #avg reward needed to be considered a satisfactory solution
 EPISODES    = 4000  #max num episodes per run
@@ -67,13 +67,13 @@ def train_model(env         : UnityEnvironment,
 vars = [
         ["discrete",            32, 64, 128],               # BATCH
         ["continuous-float",    0.1,        0.8],           # BAD_STEP_PROB
-        ["continuous-float",    0.2,        0.95],          # NOISE_INIT
-        ["continuous-float",    -5.0,       -2.0],          # log10 of 1-NOISE_DECAY
+        ["continuous-float",    0.4,        0.95],          # NOISE_INIT
+        ["continuous-float",    -5.0,       -4.0],          # log10 of 1-NOISE_DECAY
         ["continuous-float",    -5.0,       -2.0],          # log10 of actor LR (all agent types)
         ["continuous-float",    -5.0,       -2.0],          # log10 of critic LR (all agent types)
         ["discrete",            512, 748, 1024],            # ACTOR_NN_L1 num nodes
         ["discrete",            4, 8],                      # ACTOR_NN_L2 divisor (from l1)
-        ["discrete",            1536, 2048, 3072, 4096],    # CRITIC_NN_L1 num nodes
+        ["discrete",            1536, 2048, 3072],    # CRITIC_NN_L1 num nodes
         ["discrete",            4, 8]                       # CRITIC_NN_L2 divisor (from l1)
        ]
 rs = RandomSampler(vars)

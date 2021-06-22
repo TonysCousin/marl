@@ -24,8 +24,9 @@ DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 # probability of keeping experiences with bad rewards during replay buffer priming
 BAD_STEP_KEEP_PROB_INIT = 0.1
 
+#TODO: this threshold should be a param, since it may be game dependent
 # experience reward value above which is considered a desirable experience
-REWARD_THRESHOLD = 0.009
+REWARD_THRESHOLD = 0.1 #only allows experiences with a goal scored
 
 
 class AgentMgr:
@@ -39,6 +40,7 @@ class AgentMgr:
                  batch_size     : int = 32,         # number of experiences in a learning batch
                  buffer_size    : int = 100000,     # capacity of the experience replay buffer
                  buffer_prime   : int = 1000,       # number of experiences to be stored in replay buffer before learning begins
+                 learn_every    : int = 1,          # number of time steps between learning activity
                  bad_step_prob  : float = 0.1,      # probability of keeping an experience (after buffer priming) with a low reward
                  use_noise      : bool = False,     # should we inject random noise into actions?
                  noise_init     : float = 1.0,      # initial probability of noise being added if it is turned on
@@ -81,7 +83,7 @@ class AgentMgr:
         # initialize other internal stuff
         self.learning_underway = False 
         self.learn_control = 0          #num time steps between learning events
-        self.learn_every = 1            #number of time steps between learning events
+        self.learn_every = learn_every
 
         # find the total numbers of states & actions across all agents
         self.num_states_all = 0
@@ -148,7 +150,7 @@ class AgentMgr:
                         if self.prng.random() < self.noise_level:
                             actions[i] = self.prng.integers(0, at.max_action_val)
 
-                    # else get the action for this agent
+                    # else get the action for this agent from its policy NN
                     s = torch.from_numpy(states[t][i]).float().to(DEVICE)
                     with torch.no_grad():
                         actions[i] = at.actor_policy(s).cpu().data.numpy()
@@ -174,7 +176,7 @@ class AgentMgr:
     #------------------------------------------------------------------------------
 
     """Stores a new experience from the environment in replay buffer, if appropriate,
-        and advances the agents by one time step.
+        and advances the agents by one time step.  Also initiates learning, if appropriate.
 
         Return:  none
     """
