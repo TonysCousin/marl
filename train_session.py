@@ -15,8 +15,8 @@ from random_sampler import RandomSampler
 
 #----------------------------------------------------------------------
 
-NAME        = "REWARDS" #3
-NUM_RUNS    = 10
+NAME        = "TRAIN5" #
+NUM_RUNS    = 4
 CHKPT_EVERY = 500
 PRIME       = 2  #num random experiences added to the replay buffer before training begins
 SEED        = 111   #0, 111, 468, 5555, 23100, 44939
@@ -66,9 +66,9 @@ def train_model(env         : UnityEnvironment,
 
 vars = [
         ["discrete",            32, 64, 128],               # BATCH
-        ["continuous-float",    0.1,        0.8],           # BAD_STEP_PROB
-        ["continuous-float",    0.4,        0.95],          # NOISE_INIT
-        ["continuous-float",    -5.0,       -4.0],          # log10 of 1-NOISE_DECAY
+        ["continuous-float",    0.01,        0.2],          # BAD_STEP_PROB
+        ["continuous-float",    0.5,        0.95],          # NOISE_INIT
+        ["continuous-float",    -5.3,       -4.0],          # log10 of 1-NOISE_DECAY
         ["continuous-float",    -5.0,       -2.0],          # log10 of actor LR (all agent types)
         ["continuous-float",    -5.0,       -2.0],          # log10 of critic LR (all agent types)
         ["discrete",            512, 748, 1024],            # ACTOR_NN_L1 num nodes
@@ -101,7 +101,7 @@ for run in range(NUM_RUNS):
     print("      Batch size     = {:4d}".format(BATCH))
     print("      Bad step prob  = {:.2f}".format(BAD_STEP_PROB))
     print("      Initial noise  = {:.2f}".format(NOISE_INIT))
-    print("      Noise decay    = {:.5f}".format(NOISE_DECAY))
+    print("      Noise decay    = {:.6f}".format(NOISE_DECAY))
     print("      Actor LR       = {:.6f}".format(ACTOR_LR))
     print("      Critic LR      = {:.6f}".format(CRITIC_LR))
     print("      Actor l1 size  = {:d}".format(ACTOR_NN_L1))

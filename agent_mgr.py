@@ -58,7 +58,8 @@ class AgentMgr:
         self.use_noise = use_noise
         self.noise_decay = noise_decay
         self.noise_level = noise_init
-        self.noise_reported = False #has decay threshold been met and reported to user?
+        self.noise_reported1 = False #has first decay threshold been met and reported to user?
+        self.noise_reported2 = False #has second decay threshold been met and reported to user?
         self.gamma = discount_factor
         self.tau = update_factor
         
@@ -138,6 +139,7 @@ class AgentMgr:
         act = {}
 
         if self.learning_underway  or  is_inference:
+            print("\n")
             for t in self.agent_types:
                 at = self.agent_types[t]
                 actions = np.empty((at.num_agents, 1), dtype=int) #one element for each agent of this type
@@ -146,9 +148,10 @@ class AgentMgr:
                 for i in range(at.num_agents):
 
                     # add noise if appropriate by selecting a random action
-                    if add_noise:
+                    if add_noise  or  self.use_noise:
                         if self.prng.random() < self.noise_level:
                             actions[i] = self.prng.integers(0, at.max_action_val)
+                            print("Random action taken: {} {} action {}".format(t, i, actions[i]))
 
                     # else get the action for this agent from its policy NN
                     s = torch.from_numpy(states[t][i]).float().to(DEVICE)
@@ -161,9 +164,12 @@ class AgentMgr:
 
                 # reduce the noise probability
                 self.noise_level *= self.noise_decay
-                if self.noise_level <= 0.1  and  not self.noise_reported:
+                if self.noise_level <= 0.1  and  not self.noise_reported1:
                     print("\n* Noise decayed to 0.1")
-                    self.noise_reported = True
+                    self.noise_reported1 = True
+                if self.noise_level <= 0.01  and  not self.noise_reported2:
+                    print("\n* Noise decayed to 0.01")
+                    self.noise_reported2 = True
 
         else: # must be priming the replay buffer
             for t in self.agent_types:
