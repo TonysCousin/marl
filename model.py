@@ -25,7 +25,10 @@ def hidden_init(layer):
 #------------------------------------------------------------------------------
 
 class GoalieActor(nn.Module):
-    """Actor (Policy) Model."""
+    """Actor (Policy) Model.
+
+        Return from forward() must be in [-1, 1], so needs a tanh activation.
+    """
 
     def __init__(self, state_size, action_size, fc1_units=256, fc2_units=128):
         """Initialize parameters and build model.
@@ -105,7 +108,10 @@ class GoalieCritic(nn.Module):
 #------------------------------------------------------------------------------
 
 class StrikerActor(nn.Module):
-    """Actor (Policy) Model."""
+    """Actor (Policy) Model.
+
+        Return from forward() must be in [-1, 1], so needs a tanh activation.
+    """
 
     def __init__(self, state_size, action_size, fc1_units=256, fc2_units=128):
         """Initialize parameters and build model.

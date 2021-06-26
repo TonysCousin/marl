@@ -167,14 +167,19 @@ class AgentMgr:
                             else:
                                 actions[i] = self.prng.integers(0, at.max_action_val)
 
-                            print("Random action taken: {} {} action {}".format(t, i, actions[i]))
                             noise_added = True
 
                     # else get the action for this agent from its policy NN
                     if not noise_added:
                         s = torch.from_numpy(states[t][i]).float().to(DEVICE)
                         with torch.no_grad():
-                            actions[i] = at.actor_policy(s).cpu().data.numpy()
+                            raw = at.actor_policy(s).cpu().data.numpy()[0]
+
+                            # the raw output from the NN will be in [-1, 1] so we need to map that to the
+                            # integer action space in [0, max_action_val)
+                            actions[i] = int(0.5 * (raw + 1.0) * at.max_action_val)
+                            if actions[i] < 0  or  actions[i] >= at.max_action_val:
+                                print("\n##### Invalid action coming from policy! {} {} action {}".format(t, i, actions[i]))
 
                 at.actor_policy.train()
 
