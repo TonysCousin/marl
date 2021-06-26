@@ -15,7 +15,7 @@ from agent_mgr      import AgentMgr
 
 AVG_SCORE_EXTENT = 100 # number of episodes over which running average scores are computed
 CHECKPOINT_PATH = "checkpoint/" # can be empty string, but if a dir is named, needs trailing '/'
-ABORT_EPISODE = 1000 # num episodes after which training will abort if insignificant learning is detected
+ABORT_EPISODE = 700 # num episodes after which training will abort if insignificant learning is detected
 PRIME_FEEDBACK_INTERVAL = 2000 # num time steps between visual feedback of priming progress
 
 
@@ -161,6 +161,7 @@ def train(mgr               : AgentMgr,         # manages all agents and their l
             hit_rate = float(mem_stats[1]) / ep
             if hit_rate < 0.01  or  (rem_time > 2.0  and  hit_rate < 0.04):
                 print("\n* Aborting due to inadequate progress.")
+                print("Final noise level = {:6.4f}".format(mgr.get_noise_level()))
                 break
 
     # in games that normally terminate with a done flag, it makes sense to see how quickly that flag

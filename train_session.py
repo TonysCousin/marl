@@ -15,9 +15,9 @@ from random_sampler import RandomSampler
 
 #----------------------------------------------------------------------
 
-NAME        = "TRAIN5" #
+NAME        = "TRAIN6" #
 NUM_RUNS    = 4
-CHKPT_EVERY = 500
+CHKPT_EVERY = 400
 PRIME       = 2000  #num random experiences added to the replay buffer before training begins
 SEED        = 111   #0, 111, 468, 5555, 23100, 44939
 GOAL        = 0.9   #avg reward needed to be considered a satisfactory solution
@@ -91,7 +91,7 @@ for run in range(NUM_RUNS):
     NOISE_INIT      = v[2]
     NOISE_DECAY     = min((1.0 - math.pow(10.0, v[3])), 0.99999)
     ACTOR_LR        = math.pow(10.0, v[4])
-    CRITIC_LR       = math.pow(10.0, v[5])
+    CRITIC_LR       = min(math.pow(10.0, v[5]), 1.1*ACTOR_LR)
     ACTOR_NN_L1     = v[6]
     ACTOR_NN_L2     = ACTOR_NN_L1 // v[7]
     CRITIC_NN_L1    = v[8]

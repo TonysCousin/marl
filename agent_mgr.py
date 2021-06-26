@@ -470,10 +470,14 @@ class AgentMgr:
         
         return False
 
-    
-
     #------------------------------------------------------------------------------
 
+    """Returns the noise level currently in use."""
+    
+    def get_noise_level(self):
+        return self.noise_level
+
+    #------------------------------------------------------------------------------
 
     """Updates the target model parameters to be a little closer to those of the policy model.
         θ_target = τ*θ_policy + (1 - τ)*θ_target; where tau < 1
