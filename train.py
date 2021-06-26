@@ -30,7 +30,9 @@ def train(mgr               : AgentMgr,         # manages all agents and their l
           starting_episode  : int    = 0,       # episode to begin counting from (used if restarting
                                                 #   from a checkpoint)
           max_episodes      : int    = 2,       # max num episodes to train if goal isn't met
-          max_time_steps    : int    = 100,     # num time steps allowed in an episode
+          init_time_steps   : int    = 100,     # max num time steps in the first episode
+          final_time_steps  : int    = 500,     # max num time steps ever allowed in an episode
+          incr_time_steps_every: int = 1,       # num episodes between increment of max time steps allowed
           sleeping          : bool   = False,   # should the code pause for a few sec after selected
                                                 #   episodes? (allows for better visualizing)
           training_goal     : float  = 0.0,     # when avg score (over AVG_SCORE_EXTENT consecutive
@@ -84,6 +86,9 @@ def train(mgr               : AgentMgr,         # manages all agents and their l
         score = 0 # total score for this episode
 
         #print("\n\n/////Begin episode ", ep, "/////\n")
+
+        # set the time step limit for this episode
+        max_time_steps = min(init_time_steps + ep//incr_time_steps_every, final_time_steps)
 
         # loop over time steps
         for i in range(max_time_steps):
@@ -163,7 +168,7 @@ def train(mgr               : AgentMgr,         # manages all agents and their l
                 print("\n* Aborting due to inadequate progress.")
                 print("Final noise level = {:6.4f}".format(mgr.get_noise_level()))
                 break
-
+        
     # in games that normally terminate with a done flag, it makes sense to see how quickly that flag
     # is raised; this doesn't make sense in games where the episode normally times out (hits max steps)
     #print("\nAvg/max time steps/episode = {:.1f}/{:d}"

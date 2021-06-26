@@ -15,14 +15,17 @@ from random_sampler import RandomSampler
 
 #----------------------------------------------------------------------
 
-NAME        = "TRAIN6" #
-NUM_RUNS    = 4
-CHKPT_EVERY = 400
-PRIME       = 2000  #num random experiences added to the replay buffer before training begins
-SEED        = 111   #0, 111, 468, 5555, 23100, 44939
-GOAL        = 0.9   #avg reward needed to be considered a satisfactory solution
-EPISODES    = 4000  #max num episodes per run
-USE_NOISE   = True
+NAME                = "TRAIN6" #
+NUM_RUNS            = 4
+CHKPT_EVERY         = 400
+PRIME               = 2000  #num random experiences added to the replay buffer before training begins
+SEED                = 111   #0, 111, 468, 5555, 23100, 44939
+GOAL                = 0.9   #avg reward needed to be considered a satisfactory solution
+EPISODES            = 4000  #max num episodes per run
+INIT_TIME_STEPS     = 120
+INCR_TSTEP_EVERY    = 4
+FINAL_TIME_STEPS    = 400
+USE_NOISE           = True
 
 #----------------------------------------------------------------------
 
@@ -58,7 +61,8 @@ def train_model(env         : UnityEnvironment,
                     use_noise=use_noise, noise_init=noise_init, noise_decay=noise_decay)
     #print("Haltus")
 
-    train(mgr, env, run_name=name, max_episodes=episodes, chkpt_interval=CHKPT_EVERY, training_goal=goal)
+    train(mgr, env, run_name=name, max_episodes=episodes, chkpt_interval=CHKPT_EVERY, training_goal=goal,
+          init_time_steps=INIT_TIME_STEPS, incr_time_steps_every=INCR_TSTEP_EVERY, final_time_steps=FINAL_TIME_STEPS)
 
 #----------------------------------------------------------------------
 #   EXECUTE THE TRAINING SESSION
@@ -67,8 +71,8 @@ def train_model(env         : UnityEnvironment,
 vars = [
         ["discrete",            32, 64, 128],               # BATCH
         ["continuous-float",    0.01,        0.2],          # BAD_STEP_PROB
-        ["continuous-float",    0.5,        0.95],          # NOISE_INIT
-        ["continuous-float",    -5.3,       -4.0],          # log10 of 1-NOISE_DECAY
+        ["continuous-float",    0.3,         0.8],          # NOISE_INIT
+        ["continuous-float",    -5.1,       -3.0],          # log10 of 1-NOISE_DECAY
         ["continuous-float",    -5.0,       -2.0],          # log10 of actor LR (all agent types)
         ["continuous-float",    -5.0,       -2.0],          # log10 of critic LR (all agent types)
         ["discrete",            512, 748, 1024],            # ACTOR_NN_L1 num nodes
