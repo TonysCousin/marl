@@ -24,6 +24,9 @@ DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 # probability of keeping experiences with bad rewards during replay buffer priming
 BAD_STEP_KEEP_PROB_INIT = 0.1
 
+# fraction of time that is considered "most of it" for smoothing random actions
+MOST_OF_TIME = 0.75
+
 #TODO: this threshold should be a param, since it may be game dependent
 # experience reward value above which is considered a desirable experience
 REWARD_THRESHOLD = 0.1 #only allows experiences with a goal scored
@@ -85,6 +88,7 @@ class AgentMgr:
         self.learning_underway = False 
         self.learn_control = 0          #num time steps between learning events
         self.learn_every = learn_every
+        self.prev_act = {}              #holds actions from previous time step; each entry is an agent type tensor
 
         # find the total numbers of states & actions across all agents
         self.num_states_all = 0
@@ -95,6 +99,7 @@ class AgentMgr:
             self.num_states_all += at.state_size * at.num_agents
             self.num_actions_all += 1 * at.num_agents #for now we only define 1 enumerated action per agent
             self.num_agents_all += at.num_agents
+            self.prev_act[t] = np.zeros((at.num_agents, 1), dtype=int) #one element for each agent of this type
         
         # define simple experience replay buffer common to all agents
         self.erb = ReplayBuffer(buffer_size, batch_size, buffer_prime, REWARD_THRESHOLD, self.prng)
@@ -150,8 +155,19 @@ class AgentMgr:
                     noise_added = False
                     if add_noise  or  self.use_noise:
                         if self.prng.random() < self.noise_level:
-                            actions[i] = self.prng.integers(0, at.max_action_val)
-                            #print("Random action taken: {} {} action {}".format(t, i, actions[i]))
+
+                            # Now that we have decided to make some noise for this agent, we would like the action to be
+                            # not quite random.  Most of the time we want it to continue doing what it did in the previous
+                            # time step so as to exhibit smooth motion, not herky-jerky.  Therefore, if a random draw in
+                            # [0, 1) < "most of the time" threshold, just copy the previous action
+                            if self.prng.random() < MOST_OF_TIME:
+                                actions[i] = self.prev_act[t][i]
+                            
+                            # otherwise, let's pick a truly random action to have fun with
+                            else:
+                                actions[i] = self.prng.integers(0, at.max_action_val)
+
+                            print("Random action taken: {} {} action {}".format(t, i, actions[i]))
                             noise_added = True
 
                     # else get the action for this agent from its policy NN
@@ -163,6 +179,7 @@ class AgentMgr:
                 at.actor_policy.train()
 
                 act[t] = actions
+                self.prev_act[t] = actions
 
                 # reduce the noise probability
                 self.noise_level *= self.noise_decay
@@ -473,7 +490,7 @@ class AgentMgr:
     #------------------------------------------------------------------------------
 
     """Returns the noise level currently in use."""
-    
+
     def get_noise_level(self):
         return self.noise_level
 

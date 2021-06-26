@@ -15,7 +15,7 @@ from agent_mgr      import AgentMgr
 
 AVG_SCORE_EXTENT = 100 # number of episodes over which running average scores are computed
 CHECKPOINT_PATH = "checkpoint/" # can be empty string, but if a dir is named, needs trailing '/'
-ABORT_EPISODE = 700 # num episodes after which training will abort if insignificant learning is detected
+ABORT_EPISODE = 401 # num episodes after which training will abort if insignificant learning is detected
 PRIME_FEEDBACK_INTERVAL = 2000 # num time steps between visual feedback of priming progress
 
 
