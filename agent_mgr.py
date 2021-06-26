@@ -139,7 +139,6 @@ class AgentMgr:
         act = {}
 
         if self.learning_underway  or  is_inference:
-            print("\n")
             for t in self.agent_types:
                 at = self.agent_types[t]
                 actions = np.empty((at.num_agents, 1), dtype=int) #one element for each agent of this type
@@ -148,15 +147,18 @@ class AgentMgr:
                 for i in range(at.num_agents):
 
                     # add noise if appropriate by selecting a random action
+                    noise_added = False
                     if add_noise  or  self.use_noise:
                         if self.prng.random() < self.noise_level:
                             actions[i] = self.prng.integers(0, at.max_action_val)
-                            print("Random action taken: {} {} action {}".format(t, i, actions[i]))
+                            #print("Random action taken: {} {} action {}".format(t, i, actions[i]))
+                            noise_added = True
 
                     # else get the action for this agent from its policy NN
-                    s = torch.from_numpy(states[t][i]).float().to(DEVICE)
-                    with torch.no_grad():
-                        actions[i] = at.actor_policy(s).cpu().data.numpy()
+                    if not noise_added:
+                        s = torch.from_numpy(states[t][i]).float().to(DEVICE)
+                        with torch.no_grad():
+                            actions[i] = at.actor_policy(s).cpu().data.numpy()
 
                 at.actor_policy.train()
 

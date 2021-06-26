@@ -18,7 +18,7 @@ from random_sampler import RandomSampler
 NAME        = "TRAIN5" #
 NUM_RUNS    = 4
 CHKPT_EVERY = 500
-PRIME       = 2  #num random experiences added to the replay buffer before training begins
+PRIME       = 2000  #num random experiences added to the replay buffer before training begins
 SEED        = 111   #0, 111, 468, 5555, 23100, 44939
 GOAL        = 0.9   #avg reward needed to be considered a satisfactory solution
 EPISODES    = 4000  #max num episodes per run
