@@ -177,9 +177,9 @@ class AgentMgr:
 
                             # the raw output from the NN will be in [-1, 1] so we need to map that to the
                             # integer action space in [0, max_action_val)
-                            actions[i] = int(0.5 * (raw + 1.0) * at.max_action_val)
+                            actions[i] = int(0.499999 * (raw + 1.0) * at.max_action_val) #ensure it's always truncated below max_action_val
                             if actions[i] < 0  or  actions[i] >= at.max_action_val:
-                                print("\n##### Invalid action coming from policy! {} {} action {}".format(t, i, actions[i]))
+                                print("##### Invalid action coming from policy! {} {} action {}".format(t, i, actions[i]))
 
                 at.actor_policy.train()
 
