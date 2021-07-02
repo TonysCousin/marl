@@ -406,6 +406,10 @@ class AgentMgr:
         where the * represents the names of each agent type in use (there are four fields
         specific to each agent type). Each field except "version" holds a state_dict.
         Version is a string.
+
+        Version marl1:  initial
+                marl2:  updated NN actors to output an array of possible actions rather
+                         than a single value representing the chosen action.
     """
 
     def save_checkpoint(self, 
@@ -415,7 +419,7 @@ class AgentMgr:
                        ):
 
         checkpoint = {}
-        checkpoint["version"] = "marl1"
+        checkpoint["version"] = "marl2"
 
         for t in self.agent_types:
             at = self.agent_types[t]
@@ -446,6 +450,16 @@ class AgentMgr:
 
         filename = "{}{}_{}.pt".format(path, name, episode)
         checkpoint = torch.load(filename)
+
+        # check that the data file is compatible with the current needs
+        file_ver = checkpoint["version"]
+        needed_ver = "marl2"
+
+        if file_ver != needed_ver:
+            print("\n///// ERROR: unable to load checkpoint {}, which was built with {} software." \
+                    .format(filename, file_ver))
+            print("             Version {} checkpoints required.".format(needed_ver))
+            return
 
         for t in self.agent_types:
             at = self.agent_types[t]
