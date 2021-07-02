@@ -15,13 +15,13 @@ from random_sampler import RandomSampler
 
 #----------------------------------------------------------------------
 
-NAME                = "TRAIN7" #
+NAME                = "TRAIN8" #
 NUM_RUNS            = 4
 CHKPT_EVERY         = 400
 PRIME               = 2000  #num random experiences added to the replay buffer before training begins
 SEED                = 468   #0, 111, 468, 5555, 23100, 44939
 GOAL                = 0.9   #avg reward needed to be considered a satisfactory solution
-EPISODES            = 2000  #max num episodes per run
+EPISODES            = 2001  #max num episodes per run
 INIT_TIME_STEPS     = 120
 INCR_TSTEP_EVERY    = 5
 FINAL_TIME_STEPS    = 400
@@ -49,12 +49,17 @@ def train_model(env         : UnityEnvironment,
                ):
 
     # define NNs
+    goalie_states = 336
+    goalie_actions = 4
+    striker_states = 336
+    striker_actions = 6
     agent_models = AgentModels()
-    agent_models.add_actor_critic("GoalieBrain", GoalieActor(336, 1, fc1_units=actor_nn_l1, fc2_units=actor_nn_l2), 
-                                    GoalieCritic(1344, 4, fcs1_units=critic_nn_l1, fc2_units=critic_nn_l2),
-                                    actor_lr, critic_lr)
-    agent_models.add_actor_critic("StrikerBrain", StrikerActor(336, 1, fc1_units=actor_nn_l1, fc2_units=actor_nn_l2),
-                                    StrikerCritic(1344, 4, fcs1_units=critic_nn_l1, fc2_units=critic_nn_l2),
+    agent_models.add_actor_critic("GoalieBrain", GoalieActor(goalie_states, goalie_actions, fc1_units=actor_nn_l1, fc2_units=actor_nn_l2), 
+                                    GoalieCritic(2*(goalie_states + striker_states), 4, 
+                                    fcs1_units=critic_nn_l1, fc2_units=critic_nn_l2), actor_lr, critic_lr)
+    agent_models.add_actor_critic("StrikerBrain", StrikerActor(striker_states, striker_actions, fc1_units=actor_nn_l1, fc2_units=actor_nn_l2),
+                                    StrikerCritic(2*(goalie_states + striker_states), 4,
+                                    fcs1_units=critic_nn_l1, fc2_units=critic_nn_l2), 
                                     actor_lr, critic_lr)
 
     mgr = AgentMgr(env, agent_models, batch_size=batch, buffer_prime=prime, bad_step_prob=bad_step_prob, random_seed=seed,

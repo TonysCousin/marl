@@ -169,6 +169,8 @@ def train(mgr               : AgentMgr,         # manages all agents and their l
                 print("Final noise level = {:6.4f}".format(mgr.get_noise_level()))
                 break
         
+        sys.stdout.flush()
+
     # in games that normally terminate with a done flag, it makes sense to see how quickly that flag
     # is raised; this doesn't make sense in games where the episode normally times out (hits max steps)
     #print("\nAvg/max time steps/episode = {:.1f}/{:d}"

@@ -173,13 +173,8 @@ class AgentMgr:
                     if not noise_added:
                         s = torch.from_numpy(states[t][i]).float().to(DEVICE)
                         with torch.no_grad():
-                            raw = at.actor_policy(s).cpu().data.numpy()[0]
-
-                            # the raw output from the NN will be in [-1, 1] so we need to map that to the
-                            # integer action space in [0, max_action_val)
-                            actions[i] = int(0.499999 * (raw + 1.0) * at.max_action_val) #ensure it's always truncated below max_action_val
-                            if actions[i] < 0  or  actions[i] >= at.max_action_val:
-                                print("##### Invalid action coming from policy! {} {} action {}".format(t, i, actions[i]))
+                            raw = at.actor_policy(s).cpu().data.numpy()
+                            actions[i] = np.argmax(raw) #raw is a 1D vector representing all possible actions of 1 agent
 
                 at.actor_policy.train()
 
@@ -317,22 +312,24 @@ class AgentMgr:
 
                 # grab next state vectors and use this agent's target network to predict next actions
                 ns = next_states[t][:, agent, :]
-                ta = at.actor_target(ns)
+                raw = at.actor_target(ns).cpu().detach().numpy()
+                ta = torch.from_numpy(np.argmax(raw, axis=1)).float()
 
                 # grab current state vector and use this agent's current policy to decide current actions
                 cs = states[t][:, agent, :]
-                ca = at.actor_policy(cs)
+                raw = at.actor_policy(cs).cpu().detach().numpy()
+                ca = torch.from_numpy(np.argmax(raw, axis=1)).float()
 
                 if first:
-                    target_actions = ta.to(DEVICE)
-                    cur_actions = ca.to(DEVICE)
+                    target_actions = ta.unsqueeze(1).to(DEVICE)
+                    cur_actions = ca.unsqueeze(1).to(DEVICE)
                     first = False
                 else:
-                    target_actions = torch.cat((target_actions, ta), dim=1)
-                    cur_actions = torch.cat((cur_actions, ca), dim=1)
+                    target_actions = torch.cat((target_actions, ta.unsqueeze(1)), dim=1)
+                    cur_actions = torch.cat((cur_actions, ca.unsqueeze(1)), dim=1)
                 
                 # resulting target_actions and cur_actions tensors are of shape [b, z], where z is the
-                # sum of all agents' action spaces for that agent type (all agents are represented in a single row)
+                # sum of all agents' action spaces for that agent type (all agents are represented in each row)
 
         #.........Update the critic NNs based on learning losses
 
