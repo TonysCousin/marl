@@ -2,22 +2,21 @@
     runs with the same model.
 """
 
-import time
 import math
 
 from unityagents    import UnityEnvironment
 from agent_mgr      import AgentMgr
 from agent_models   import AgentModels
-from train          import train
+from train          import build_and_train_model
 from model          import GoalieActor, GoalieCritic, StrikerActor, StrikerCritic
 from random_sampler import RandomSampler
 
 
 #----------------------------------------------------------------------
 
-NAME                = "TRAIN8" #
+NAME                = "TRAIN9" #
 NUM_RUNS            = 4
-CHKPT_EVERY         = 400
+CHKPT_EVERY         = 100
 PRIME               = 2000  #num random experiences added to the replay buffer before training begins
 SEED                = 468   #0, 111, 468, 5555, 23100, 44939
 GOAL                = 0.9   #avg reward needed to be considered a satisfactory solution
@@ -27,52 +26,7 @@ INCR_TSTEP_EVERY    = 5
 FINAL_TIME_STEPS    = 400
 USE_NOISE           = True
 
-#----------------------------------------------------------------------
-
-def train_model(env         : UnityEnvironment,
-                name        : str,
-                batch       : int,
-                prime       : int,
-                seed        : int,
-                goal        : float,
-                episodes    : int,
-                bad_step_prob: float,
-                use_noise   : bool,
-                noise_init  : float,
-                noise_decay : float,
-                actor_lr    : float,
-                critic_lr   : float,
-                actor_nn_l1 : int,
-                actor_nn_l2 : int,
-                critic_nn_l1: int,
-                critic_nn_l2: int
-               ):
-
-    # define NNs
-    goalie_states = 336
-    goalie_actions = 4
-    striker_states = 336
-    striker_actions = 6
-    agent_models = AgentModels()
-    agent_models.add_actor_critic("GoalieBrain", GoalieActor(goalie_states, goalie_actions, fc1_units=actor_nn_l1, fc2_units=actor_nn_l2), 
-                                    GoalieCritic(2*(goalie_states + striker_states), 4, 
-                                    fcs1_units=critic_nn_l1, fc2_units=critic_nn_l2), actor_lr, critic_lr)
-    agent_models.add_actor_critic("StrikerBrain", StrikerActor(striker_states, striker_actions, fc1_units=actor_nn_l1, fc2_units=actor_nn_l2),
-                                    StrikerCritic(2*(goalie_states + striker_states), 4,
-                                    fcs1_units=critic_nn_l1, fc2_units=critic_nn_l2), 
-                                    actor_lr, critic_lr)
-
-    mgr = AgentMgr(env, agent_models, batch_size=batch, buffer_prime=prime, bad_step_prob=bad_step_prob, random_seed=seed,
-                    use_noise=use_noise, noise_init=noise_init, noise_decay=noise_decay)
-    #print("Haltus")
-
-    train(mgr, env, run_name=name, max_episodes=episodes, chkpt_interval=CHKPT_EVERY, training_goal=goal,
-          init_time_steps=INIT_TIME_STEPS, incr_time_steps_every=INCR_TSTEP_EVERY, final_time_steps=FINAL_TIME_STEPS)
-
-#----------------------------------------------------------------------
-#   EXECUTE THE TRAINING SESSION
-#----------------------------------------------------------------------
-
+# Define the ranges of hyperparams that will be explored
 vars = [
         ["discrete",            32, 64, 128],               # BATCH
         ["continuous-float",    0.01,        0.2],          # BAD_STEP_PROB
@@ -90,6 +44,7 @@ rs = RandomSampler(vars)
 # Need to create the Unity env one time; destroying it and creating a new one inside the loop doesn't work
 env = UnityEnvironment(file_name="/home/starkj/soccer/Soccer_Linux/Soccer.x86_64")
 
+# Loop through the desired number of training runs and randomly select a set of hyperparams for each run
 for run in range(NUM_RUNS):
 
     run_name = "{}-{:02d}".format(NAME, run)
@@ -118,7 +73,9 @@ for run in range(NUM_RUNS):
     print("      Critic l1 size = {:d}".format(CRITIC_NN_L1))
     print("      Critic l2 size = {:d}".format(CRITIC_NN_L2))
 
-    train_model(env, run_name, BATCH, PRIME, SEED, GOAL, EPISODES, BAD_STEP_PROB, USE_NOISE, NOISE_INIT, NOISE_DECAY,
+    # Build the model with the selected hyperparams and train it
+    build_and_train_model(env, run_name, BATCH, PRIME, SEED, GOAL, EPISODES, BAD_STEP_PROB, USE_NOISE, NOISE_INIT, NOISE_DECAY,
                 ACTOR_LR, CRITIC_LR, ACTOR_NN_L1, ACTOR_NN_L2, CRITIC_NN_L1, CRITIC_NN_L2)
 
+# Close the Unity environment after all training runs are complete
 env.close()

@@ -2,7 +2,6 @@
 # based on the Unity ML-Agents framework.
 
 import numpy as np
-import torch
 import time
 import copy
 import sys
@@ -11,6 +10,8 @@ from collections    import deque
 from unityagents    import UnityEnvironment
 
 from agent_type     import AgentType
+from agent_models   import AgentModels
+from model          import GoalieActor, GoalieCritic, StrikerActor, StrikerCritic
 from agent_mgr      import AgentMgr
 
 AVG_SCORE_EXTENT = 100 # number of episodes over which running average scores are computed
@@ -18,6 +19,59 @@ CHECKPOINT_PATH = "checkpoint/" # can be empty string, but if a dir is named, ne
 ABORT_EPISODE = 401 # num episodes after which training will abort if insignificant learning is detected
 PRIME_FEEDBACK_INTERVAL = 2000 # num time steps between visual feedback of priming progress
 
+
+#----------------------------------------------------------------------
+
+"""Defines the model to be trained and executes a brand-new training plan from scratch
+    for the specified duration.
+"""
+
+def build_and_train_model(env                   : UnityEnvironment,
+                          name                  : str,
+                          batch                 : int,
+                          prime                 : int,
+                          seed                  : int,
+                          goal                  : float,
+                          start_episode         : int,
+                          episodes              : int,
+                          chkpt_every           : int,
+                          init_time_steps       : int,
+                          incr_time_steps_every : int,
+                          final_time_steps      : int,
+                          bad_step_prob         : float,
+                          use_noise             : bool,
+                          noise_init            : float,
+                          noise_decay           : float,
+                          actor_lr              : float,
+                          critic_lr             : float,
+                          actor_nn_l1           : int,
+                          actor_nn_l2           : int,
+                          critic_nn_l1          : int,
+                          critic_nn_l2          : int
+                         ):
+
+    # define NNs
+    goalie_states = 336
+    goalie_actions = 4
+    striker_states = 336
+    striker_actions = 6
+    agent_models = AgentModels()
+    agent_models.add_actor_critic("GoalieBrain", GoalieActor(goalie_states, goalie_actions, fc1_units=actor_nn_l1, fc2_units=actor_nn_l2), 
+                                    GoalieCritic(2*(goalie_states + striker_states), 4, 
+                                    fcs1_units=critic_nn_l1, fc2_units=critic_nn_l2), actor_lr, critic_lr)
+    agent_models.add_actor_critic("StrikerBrain", StrikerActor(striker_states, striker_actions, fc1_units=actor_nn_l1, fc2_units=actor_nn_l2),
+                                    StrikerCritic(2*(goalie_states + striker_states), 4,
+                                    fcs1_units=critic_nn_l1, fc2_units=critic_nn_l2), 
+                                    actor_lr, critic_lr)
+
+    mgr = AgentMgr(env, agent_models, batch_size=batch, buffer_prime=prime, bad_step_prob=bad_step_prob, random_seed=seed,
+                    use_noise=use_noise, noise_init=noise_init, noise_decay=noise_decay)
+    #print("Haltus")
+
+    train(mgr, env, run_name=name, starting_episode=start_episode, max_episodes=episodes, chkpt_interval=chkpt_every, training_goal=goal,
+          init_time_steps=init_time_steps, incr_time_steps_every=incr_time_steps_every, final_time_steps=final_time_steps)
+
+#----------------------------------------------------------------------
 
 """Trains a set of DRL agents in a Unity ML-Agents environment.
 
