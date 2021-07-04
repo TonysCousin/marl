@@ -67,6 +67,27 @@ def build_and_train_model(env                   : UnityEnvironment,
     #   4 - move left
     #   5 - move right
     #   6 - do nothing
+    #
+    # State vectors include 3 time steps of 112 values each.  The first 112 are two steps old, the next 112 are one step old, and
+    # the current time step is represented in the final 112 values.  Within each of these 112 values, the structure is in groups
+    # of 8 values, each representing one of 14 visual ray traces emanating out from the agent.  Empirical evidence indicates the
+    # following approximate interpretations, which contradicts the explanation from the Unity site:
+    #   Rays ....
+    #
+    # For each of the rays, its 8 values consist of a 7-long one-hot vector to indicate the type of object it sees, and the last
+    # value indicates the distance to that object, in [0, 1).  For the one-ho vector, the values are exactly 1.0 or 0.0.  If a
+    # ray sees nothing then all 8 of its values are 0.0.  The one-hot values (elements 0-6) represent the following:
+    #   0 - ball
+    #   1 - unused
+    #   2 - unused
+    #   3 - side wall (does not distinguish which side)
+    #   4 - red striker
+    #   5 - blue striker
+    #   6 - unused
+    # It is a shame that there are so many dead values in this state vector. In particular, it would be nice to identify the goals
+    # and the goalies.  A striker never has any knowledge where it is relative to the goal it is to shoot at, which seems to be
+    # a huge impediment to learning desirable behavior.
+    #
     goalie_states = 336
     goalie_actions = 5
     striker_states = 336
@@ -313,6 +334,57 @@ def max_rewards(types: {},  # dict of AgentType describing all agent types
 
 #------------------------------------------------------------------------------
 
+#TODO: make this a callback supplied by the game-specific code
+
+"""Modifies the rewards beyond what the Unity environment provides, in order to
+    accelerate learning. Early experience shows that learning finds a big local maximum
+    in the rewards, achieved by strikers standing around doing nothing, thus their
+    goalies don't get scored against. This function encourages strikers to move toward
+    the ball in order to keep it in action, by giving a slight positive reward for
+    minimizing distance to the ball.
+
+    Return: updated rewards dict.
+"""
+
+def modify_rewards(types        : {},   # dict of AgentType describing all agent types
+                   rewards      : {},   # dict of lists of rewards for each agent of each type
+                   states       : {}    # dict of latest states for each agent type; each entry is
+                                        # ndarray[n, x], where n is number of agents of that type
+                  ):
+    
+    # observe the final 112 elements of the state vector, which is the current time step
+    start = 2*112
+            
+    # look for the strikers only
+    for t in types:
+        if t == "StrikerBrain":
+
+            for agent in range(states[t].shape[0]):
+
+                # look for any ray trace that observes the ball, which is element 0 of the ray, and average their distance
+                count = 0
+                sum = 0.0
+                ray_state = np.empty(8)
+                for ray in range(14):
+                    ray_state = states[t][agent, start + 8*ray : start + 8*ray + 8]
+                    if ray_state[0] > 0.99: #one-hot vector element indicating it sees the ball
+                        count += 1
+                        sum += ray_state[7]
+
+                # figure out the distance to the ball, and award bonus points if it see it and it's close
+                bonus = 0.0
+                if count > 0:
+                    distance = max(sum / count, 0.02)
+                
+                    # add a small reward if the distance to ball is close
+                    bonus = 0.0005 * (0.02 / distance)
+                
+                rewards[t][agent] += bonus
+    
+    return rewards
+
+#------------------------------------------------------------------------------
+
 """Advances the agent models and the environment to the next time step, passing data
     between the two as needed. Note that states is both an input and output; this is
     necessary to preserve its value, even though the caller probably won't need it
@@ -338,28 +410,8 @@ def advance_time_step(model         : AgentMgr,         # manager for all agetns
     next_states = all_agent_states(env_info, agent_types)
     rewards, dones = all_agent_results(env_info, agent_types)
 
-
-
-
-    #TODO: EXPERIMENTAL ONLY!
-
-    print("Next state for blue striker:")
-    for ttt in range(3):
-        for angle in range(14):
-            print("{:2d}: ".format(angle), end="")
-            offset = 112*ttt
-            for i in range(offset + 8*angle, offset + 8*angle + 8):
-                print("{:8.5f}, ".format(next_states['StrikerBrain'][1][i]), end="")
-            print(" ")
-        print(" ")
-    print("Rewards = ", rewards)
-    #xxx = input("---hit enter for next time step:")
-
-
-
-
-
-
+    # allow modification of the rewards based on state values
+    rewards = modify_rewards(agent_types, rewards, next_states)
 
     # update the agents with this new info
     model.step(states, actions, rewards, next_states, dones) 

@@ -14,21 +14,21 @@ from random_sampler import RandomSampler
 
 #----------------------------------------------------------------------
 
-NAME                = "TEST" #next is 11
+NAME                = "TRAIN11" #next is 
 NUM_RUNS            = 4
 CHKPT_EVERY         = 100
-PRIME               = 0  #num random experiences added to the replay buffer before training begins
+PRIME               = 2000  #num random experiences added to the replay buffer before training begins
 SEED                = 468   #0, 111, 468, 5555, 23100, 44939
-GOAL                = 0.9   #avg reward needed to be considered a satisfactory solution
+GOAL                = 0.8   #avg reward needed to be considered a satisfactory solution
 EPISODES            = 2001  #max num episodes per run
-INIT_TIME_STEPS     = 100
+INIT_TIME_STEPS     = 120
 INCR_TSTEP_EVERY    = 8
 FINAL_TIME_STEPS    = 400
 USE_NOISE           = True
 
 # Define the ranges of hyperparams that will be explored
 vars = [
-        ["discrete",            2], #32, 64, 128],               # BATCH
+        ["discrete",            32, 64, 128],               # BATCH
         ["continuous-float",    0.01,        0.2],          # BAD_STEP_PROB
         ["continuous-float",    0.8,         0.95],          # NOISE_INIT
         ["continuous-float",    -5.1,       -4.0],          # log10 of 1-NOISE_DECAY
