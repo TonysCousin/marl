@@ -143,6 +143,26 @@ class AgentMgr:
 
         act = {}
 
+
+
+
+        ##### FOR EXPERIMENTAL PURPOSES ONLY!
+        man_act = input("---enter code for red striker action:")
+        for t in self.agent_types:
+            at = self.agent_types[t]
+
+            if t == "GoalieBrain":
+                actions = [4, 4] #goalies do nothing
+            else:
+                actions = [man_act, 6] #move the red striker around to understand state vector meaning
+
+            act[t] = np.expand_dims(np.array(actions, dtype=float), 1) #make it a 2D array
+
+        #print("act: returning ", act)
+        return act
+
+
+
         if self.learning_underway  or  is_inference:
             for t in self.agent_types:
                 at = self.agent_types[t]

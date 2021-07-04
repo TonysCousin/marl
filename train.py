@@ -16,7 +16,7 @@ from agent_mgr      import AgentMgr
 
 AVG_SCORE_EXTENT = 100 # number of episodes over which running average scores are computed
 CHECKPOINT_PATH = "checkpoint/" # can be empty string, but if a dir is named, needs trailing '/'
-ABORT_EPISODE = 401 # num episodes after which training will abort if insignificant learning is detected
+ABORT_EPISODE = 400 # num episodes after which training will abort if insignificant learning is detected
 PRIME_FEEDBACK_INTERVAL = 2000 # num time steps between visual feedback of priming progress
 
 
@@ -50,17 +50,34 @@ def build_and_train_model(env                   : UnityEnvironment,
                           critic_nn_l2          : int
                          ):
 
-    # define NNs
+    # define NNs specifically for the soccer game
+    #
+    # Goalie actions:
+    #   0 - move forward
+    #   1 - move backward
+    #   2 - move right
+    #   3 - move left
+    #   4 - do nothing
+    #
+    # Striker actions:
+    #   0 - move forward
+    #   1 - move backward
+    #   2 - turn right
+    #   3 - turn left
+    #   4 - move left
+    #   5 - move right
+    #   6 - do nothing
     goalie_states = 336
-    goalie_actions = 4
+    goalie_actions = 5
     striker_states = 336
-    striker_actions = 6
+    striker_actions = 7
+    num_agents_in_game = 4 #assumes exactly one action value per agent
     agent_models = AgentModels()
     agent_models.add_actor_critic("GoalieBrain", GoalieActor(goalie_states, goalie_actions, fc1_units=actor_nn_l1, fc2_units=actor_nn_l2), 
-                                    GoalieCritic(2*(goalie_states + striker_states), 4, 
+                                    GoalieCritic(2*(goalie_states + striker_states), num_agents_in_game, 
                                     fcs1_units=critic_nn_l1, fc2_units=critic_nn_l2), actor_lr, critic_lr)
     agent_models.add_actor_critic("StrikerBrain", StrikerActor(striker_states, striker_actions, fc1_units=actor_nn_l1, fc2_units=actor_nn_l2),
-                                    StrikerCritic(2*(goalie_states + striker_states), 4,
+                                    StrikerCritic(2*(goalie_states + striker_states), num_agents_in_game,
                                     fcs1_units=critic_nn_l1, fc2_units=critic_nn_l2), 
                                     actor_lr, critic_lr)
 
@@ -128,6 +145,7 @@ def train(mgr               : AgentMgr,         # manages all agents and their l
 
     timestamp = time.strftime("%a %H:%M")
     print("!\nTraining underway at {}".format(timestamp))
+    sys.stdout.flush()
 
     # loop on episodes for training
     start_time = time.perf_counter()
@@ -218,7 +236,7 @@ def train(mgr               : AgentMgr,         # manages all agents and their l
         # if this solution is clearly going nowhere, then abort early
         if ep > starting_episode + ABORT_EPISODE:
             hit_rate = float(mem_stats[1]) / ep
-            if hit_rate < 0.01  or  (rem_time > 2.0  and  hit_rate < 0.04):
+            if hit_rate < 0.01  or  (rem_time > 2.0  and  hit_rate < 0.06):
                 print("\n* Aborting due to inadequate progress.")
                 print("Final noise level = {:6.4f}".format(mgr.get_noise_level()))
                 break
@@ -319,7 +337,29 @@ def advance_time_step(model         : AgentMgr,         # manager for all agetns
     env_info = env.step(ea)
     next_states = all_agent_states(env_info, agent_types)
     rewards, dones = all_agent_results(env_info, agent_types)
-    #print("\nRewards = ", rewards)
+
+
+
+
+    #TODO: EXPERIMENTAL ONLY!
+
+    print("Next state for blue striker:")
+    for ttt in range(3):
+        for angle in range(14):
+            print("{:2d}: ".format(angle), end="")
+            offset = 112*ttt
+            for i in range(offset + 8*angle, offset + 8*angle + 8):
+                print("{:8.5f}, ".format(next_states['StrikerBrain'][1][i]), end="")
+            print(" ")
+        print(" ")
+    print("Rewards = ", rewards)
+    #xxx = input("---hit enter for next time step:")
+
+
+
+
+
+
 
     # update the agents with this new info
     model.step(states, actions, rewards, next_states, dones) 

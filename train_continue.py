@@ -24,7 +24,7 @@ SEED                = 468   #0, 111, 468, 5555, 23100, 44939
 GOAL                = 0.9   #avg reward needed to be considered a satisfactory solution
 MAX_EPISODES        = 2001  #max num episodes per run
 INIT_TIME_STEPS     = 120
-INCR_TSTEP_EVERY    = 5
+INCR_TSTEP_EVERY    = 8
 FINAL_TIME_STEPS    = 400
 USE_NOISE           = True
 

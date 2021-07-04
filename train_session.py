@@ -14,23 +14,23 @@ from random_sampler import RandomSampler
 
 #----------------------------------------------------------------------
 
-NAME                = "TRAIN9" #
+NAME                = "TEST" #next is 11
 NUM_RUNS            = 4
 CHKPT_EVERY         = 100
-PRIME               = 2000  #num random experiences added to the replay buffer before training begins
+PRIME               = 0  #num random experiences added to the replay buffer before training begins
 SEED                = 468   #0, 111, 468, 5555, 23100, 44939
 GOAL                = 0.9   #avg reward needed to be considered a satisfactory solution
 EPISODES            = 2001  #max num episodes per run
-INIT_TIME_STEPS     = 120
-INCR_TSTEP_EVERY    = 5
+INIT_TIME_STEPS     = 100
+INCR_TSTEP_EVERY    = 8
 FINAL_TIME_STEPS    = 400
 USE_NOISE           = True
 
 # Define the ranges of hyperparams that will be explored
 vars = [
-        ["discrete",            32, 64, 128],               # BATCH
+        ["discrete",            2], #32, 64, 128],               # BATCH
         ["continuous-float",    0.01,        0.2],          # BAD_STEP_PROB
-        ["continuous-float",    0.7,         0.95],          # NOISE_INIT
+        ["continuous-float",    0.8,         0.95],          # NOISE_INIT
         ["continuous-float",    -5.1,       -4.0],          # log10 of 1-NOISE_DECAY
         ["continuous-float",    -5.0,       -2.0],          # log10 of actor LR (all agent types)
         ["continuous-float",    -5.0,       -2.0],          # log10 of critic LR (all agent types)
@@ -74,8 +74,9 @@ for run in range(NUM_RUNS):
     print("      Critic l2 size = {:d}".format(CRITIC_NN_L2))
 
     # Build the model with the selected hyperparams and train it
-    build_and_train_model(env, run_name, BATCH, PRIME, SEED, GOAL, EPISODES, BAD_STEP_PROB, USE_NOISE, NOISE_INIT, NOISE_DECAY,
-                ACTOR_LR, CRITIC_LR, ACTOR_NN_L1, ACTOR_NN_L2, CRITIC_NN_L1, CRITIC_NN_L2)
+    build_and_train_model(env, run_name, BATCH, PRIME, SEED, GOAL, 0, EPISODES, CHKPT_EVERY, INIT_TIME_STEPS, 
+                            INCR_TSTEP_EVERY, FINAL_TIME_STEPS, BAD_STEP_PROB, USE_NOISE, NOISE_INIT, NOISE_DECAY,
+                            ACTOR_LR, CRITIC_LR, ACTOR_NN_L1, ACTOR_NN_L2, CRITIC_NN_L1, CRITIC_NN_L2)
 
 # Close the Unity environment after all training runs are complete
 env.close()
