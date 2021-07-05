@@ -49,10 +49,14 @@ class AgentMgr:
                  noise_init     : float = 1.0,      # initial probability of noise being added if it is turned on
                  noise_decay    : float = 0.9999,   # the amount the noise probability will be reduced after each experience
                  discount_factor: float = 0.99,     # Gamma factor for discounting future time step results
-                 update_factor  : float = 0.001     # Tau factor for performing soft updates to target NN models
+                 update_factor  : float = 0.001,    # Tau factor for performing soft updates to target NN models
+                 prng           : np.random.Generator = None    # random number generator
                 ):
 
-        self.prng = np.random.default_rng(random_seed) #the one and only PRNG in the entire system (must be passed around)
+        if prng == None:
+            self.prng = np.random.default_rng(random_seed) #the one and only PRNG in the entire system (must be passed around)
+        else:
+            self.prng = prng
 
         self.batch_size = batch_size
         self.buffer_size = buffer_size

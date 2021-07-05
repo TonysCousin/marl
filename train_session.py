@@ -14,17 +14,18 @@ from random_sampler import RandomSampler
 
 #----------------------------------------------------------------------
 
-NAME                = "TRAIN11" #next is 
+NAME                = "TRAIN13" #next is 
 NUM_RUNS            = 4
 CHKPT_EVERY         = 100
 PRIME               = 2000  #num random experiences added to the replay buffer before training begins
 SEED                = 468   #0, 111, 468, 5555, 23100, 44939
 GOAL                = 0.8   #avg reward needed to be considered a satisfactory solution
-EPISODES            = 2001  #max num episodes per run
+EPISODES            = 1001  #max num episodes per run
 INIT_TIME_STEPS     = 120
 INCR_TSTEP_EVERY    = 8
 FINAL_TIME_STEPS    = 400
 USE_NOISE           = True
+USE_COACHING        = True
 
 # Define the ranges of hyperparams that will be explored
 vars = [
@@ -74,7 +75,7 @@ for run in range(NUM_RUNS):
     print("      Critic l2 size = {:d}".format(CRITIC_NN_L2))
 
     # Build the model with the selected hyperparams and train it
-    build_and_train_model(env, run_name, BATCH, PRIME, SEED, GOAL, 0, EPISODES, CHKPT_EVERY, INIT_TIME_STEPS, 
+    build_and_train_model(env, run_name, USE_COACHING, BATCH, PRIME, SEED, GOAL, 0, EPISODES, CHKPT_EVERY, INIT_TIME_STEPS, 
                             INCR_TSTEP_EVERY, FINAL_TIME_STEPS, BAD_STEP_PROB, USE_NOISE, NOISE_INIT, NOISE_DECAY,
                             ACTOR_LR, CRITIC_LR, ACTOR_NN_L1, ACTOR_NN_L2, CRITIC_NN_L1, CRITIC_NN_L2)
 

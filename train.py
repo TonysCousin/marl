@@ -28,6 +28,7 @@ PRIME_FEEDBACK_INTERVAL = 2000 # num time steps between visual feedback of primi
 
 def build_and_train_model(env                   : UnityEnvironment,
                           name                  : str,
+                          use_coaching          : bool,
                           batch                 : int,
                           prime                 : int,
                           seed                  : int,
@@ -101,13 +102,16 @@ def build_and_train_model(env                   : UnityEnvironment,
                                     StrikerCritic(2*(goalie_states + striker_states), num_agents_in_game,
                                     fcs1_units=critic_nn_l1, fc2_units=critic_nn_l2), 
                                     actor_lr, critic_lr)
+    
+    prng = np.random.default_rng(seed)
 
     mgr = AgentMgr(env, agent_models, batch_size=batch, buffer_prime=prime, bad_step_prob=bad_step_prob, random_seed=seed,
-                    use_noise=use_noise, noise_init=noise_init, noise_decay=noise_decay)
+                    use_noise=use_noise, noise_init=noise_init, noise_decay=noise_decay, prng=prng)
     #print("Haltus")
 
     train(mgr, env, run_name=name, starting_episode=start_episode, max_episodes=episodes, chkpt_interval=chkpt_every, training_goal=goal,
-          init_time_steps=init_time_steps, incr_time_steps_every=incr_time_steps_every, final_time_steps=final_time_steps)
+          init_time_steps=init_time_steps, incr_time_steps_every=incr_time_steps_every, final_time_steps=final_time_steps, prng=prng,
+          use_coaching=use_coaching)
 
 #----------------------------------------------------------------------
 
@@ -129,14 +133,15 @@ def train(mgr               : AgentMgr,         # manages all agents and their l
                                                 #   episodes? (allows for better visualizing)
           training_goal     : float  = 0.0,     # when avg score (over AVG_SCORE_EXTENT consecutive
                                                 #   episodes) exceeds this value, training is done
-          chkpt_interval    : int    = 100      # num episodes between checkpoints being stored
+          chkpt_interval    : int    = 100,     # num episodes between checkpoints being stored
+          prng              : np.random.Generator = None, # random number generator
+          use_coaching      : bool   = False    # should we coach the players with modified actions & rewards?
          ):
 
     #TODO Future: Have AgentMgr manage the env also so that train() never has to see it?
 
     # Initialize Unity simulation environment
     states = {}
-    actions = {}
     rewards = {}
     dones = {}
 
@@ -155,7 +160,7 @@ def train(mgr               : AgentMgr,         # manages all agents and their l
     env_info = env.reset(train_mode=True)
     states = all_agent_states(env_info, agent_types) #initial state vectors after env reset
     while not mgr.is_learning_underway():
-        states, rewards, dones = advance_time_step(mgr, env, agent_types, states)
+        states, rewards, dones = advance_time_step(mgr, env, False, prng, agent_types, states) #no coaching here
         if pc % PRIME_FEEDBACK_INTERVAL == 0:
             print(".", end="")
             sys.stdout.flush()
@@ -189,7 +194,7 @@ def train(mgr               : AgentMgr,         # manages all agents and their l
             #print("\n\nTime step ", i, ". states =\n", states)
 
             # advance the MADDPG model and its environment by one time step
-            states, rewards, dones = advance_time_step(mgr, env, agent_types, states)
+            states, rewards, dones = advance_time_step(mgr, env, use_coaching, prng, agent_types, states)
 
             # add this step's reward to the episode score
             score += max_rewards(agent_types, rewards)
@@ -336,6 +341,79 @@ def max_rewards(types: {},  # dict of AgentType describing all agent types
 
 #TODO: make this a callback supplied by the game-specific code
 
+"""Modifies the actions beyond what the model provides (i.e. coaching guidance), in order to
+    accelerate learning. Early experience shows that learning finds a big local maximum
+    in the rewards, achieved by strikers standing around doing nothing, thus their
+    goalies don't get scored against. This function encourages strikers to move toward
+    the ball in order to keep it in motion.  If the striker doesn't see the ball, it
+    is encouraged to move backwards (it can't see behind); if it sees the ball to the right
+    it is encouraged to move right; if it sees the ball to the left, it is encouraged to
+    move left; and if it sees the ball in front it is encouranged to move forward.
+    Encouragement is in the form of an action override "most of the time".
+
+    Return: updated actions dict.
+"""
+
+def modify_actions(prng         : np.random.Generator, # random number generator
+                   types        : {},   # dict of AgentType describing all agent types
+                   actions      : {},   # dict of arrays of commanded actons for each agent of each type
+                   states       : {}    # dict of current states for each agent type; each entry is
+                                        # ndarray[n, x], where n is number of agents of that type
+                  ):
+    
+    # if the prng has not been defined then we can't do anything here
+    if prng == None:
+        return actions
+
+    # observe the final 112 elements of the state vector, which is the current time step
+    start = 2*112
+
+    # define how often coaching will be injected
+    MOST_OF_TIME = 0.75
+
+    # if it is randomly selected then
+    if prng.random() < MOST_OF_TIME:
+
+        # set up a mapping of desired actions vs observations
+        ball_forward_action = {"GoalieBrain": 1, "StrikerBrain": 0} #goalie back, striker forward
+        ball_left_action    = {"GoalieBrain": 3, "StrikerBrain": 4} #everybody moves left
+        ball_right_action   = {"GoalieBrain": 2, "StrikerBrain": 5} #everybody moves right
+        ball_unknown_action = {"GoalieBrain": 1, "StrikerBrain": 1} #everybody back up
+        
+        # loop through each agent
+        for t in types:
+            for agent in range(states[t].shape[0]):
+
+                # get each of the 14 ray traces from the current time step & see if first element indicates it sees the ball
+                ray_state = np.empty(8)
+                is_ball = np.empty(14, dtype=bool)
+                for ray in range(14):
+                    is_ball[ray] = states[t][agent, start + 8*ray] > 0.5 #first element in each 8-element ray indicates it sees the ball
+                
+                # if it sees the ball to the left
+                if is_ball[4]  or  is_ball[11]  or  is_ball[3]  or  is_ball[10]:
+                    action = ball_left_action[t]
+                
+                # if it sees the ball to the right
+                elif is_ball[0]  or  is_ball[7]  or  is_ball[8]  or  is_ball[1]:
+                    action = ball_right_action[t]
+                
+                # if it sees the ball in front
+                elif is_ball[12]  or  is_ball[13]  or  is_ball[2]  or  is_ball[5]  or is_ball[6]  or  is_ball[9]:
+                    action = ball_forward_action[t]
+
+                # else we don't know where the ball is
+                else:
+                    action = ball_unknown_action[t]
+
+                actions[t][agent] = action
+
+    return actions
+
+#------------------------------------------------------------------------------
+
+#TODO: make this a callback supplied by the game-specific code
+
 """Modifies the rewards beyond what the Unity environment provides, in order to
     accelerate learning. Early experience shows that learning finds a big local maximum
     in the rewards, achieved by strikers standing around doing nothing, thus their
@@ -366,18 +444,21 @@ def modify_rewards(types        : {},   # dict of AgentType describing all agent
                 sum = 0.0
                 ray_state = np.empty(8)
                 for ray in range(14):
-                    ray_state = states[t][agent, start + 8*ray : start + 8*ray + 8]
-                    if ray_state[0] > 0.99: #one-hot vector element indicating it sees the ball
-                        count += 1
-                        sum += ray_state[7]
 
-                # figure out the distance to the ball, and award bonus points if it see it and it's close
+                    # only look at the rays that are toward the front of the striker
+                    if ray == 2  or  ray == 5  or  ray == 6  or  ray == 9  or  ray == 12  or  ray == 13:
+                        ray_state = states[t][agent, start + 8*ray : start + 8*ray + 8]
+                        if ray_state[0] > 0.99: #one-hot vector element indicating it sees the ball
+                            count += 1
+                            sum += ray_state[7]
+
+                # figure out the distance to the ball, and award bonus points if it sees it and it's close
                 bonus = 0.0
                 if count > 0:
-                    distance = max(sum / count, 0.02)
+                    distance = max(sum / count, 0.02) #0.02 is closest distance ever observed
                 
                     # add a small reward if the distance to ball is close
-                    bonus = 0.0005 * (0.02 / distance)
+                    bonus = 0.001 * (0.05 / distance)
                 
                 rewards[t][agent] += bonus
     
@@ -395,6 +476,8 @@ def modify_rewards(types        : {},   # dict of AgentType describing all agent
 
 def advance_time_step(model         : AgentMgr,         # manager for all agetns and environment
                       env           : UnityEnvironment, # the environment object in which all action occurs
+                      use_coaching  : bool,             # will we invoke coaching to modify actions & rewards?
+                      prng          : np.random.Generator,# random number generator
                       agent_types   : {},               # dict of AgentType
                       states        : {}                # dict of current states; each entry represents an agent type,
                                                         #   which is ndarray[num_agents, x]
@@ -402,7 +485,8 @@ def advance_time_step(model         : AgentMgr,         # manager for all agetns
 
     # Predict the best actions for the current state and store them in a single ndarray
     actions = model.act(states) #returns dict of ndarray, with each entry having one item for each agent
-    #print("\nactions = ", actions)
+    if use_coaching:
+        actions = modify_actions(prng, agent_types, actions, states)
 
     # get the new state & reward based on this action
     ea = copy.deepcopy(actions) # disposable copy because env.step() changes the elements to lists!
@@ -411,7 +495,8 @@ def advance_time_step(model         : AgentMgr,         # manager for all agetns
     rewards, dones = all_agent_results(env_info, agent_types)
 
     # allow modification of the rewards based on state values
-    rewards = modify_rewards(agent_types, rewards, next_states)
+    if use_coaching:
+        rewards = modify_rewards(agent_types, rewards, next_states)
 
     # update the agents with this new info
     model.step(states, actions, rewards, next_states, dones) 

@@ -4,6 +4,7 @@
 """
 
 import math
+from train_session import USE_COACHING
 
 from unityagents    import UnityEnvironment
 from agent_mgr      import AgentMgr
@@ -27,6 +28,7 @@ INIT_TIME_STEPS     = 120
 INCR_TSTEP_EVERY    = 8
 FINAL_TIME_STEPS    = 400
 USE_NOISE           = True
+USE_COACHING        = False
 
 BATCH           = 64
 BAD_STEP_PROB   = 0.04
@@ -55,7 +57,7 @@ print("      Critic l1 size = {:d}".format(CRITIC_NN_L1))
 print("      Critic l2 size = {:d}".format(CRITIC_NN_L2))
 
 # Build the model with the selected hyperparams and train it
-build_and_train_model(env, RUN_NAME, BATCH, PRIME, SEED, GOAL, START_EPISODE, MAX_EPISODES, CHKPT_EVERY,
+build_and_train_model(env, RUN_NAME, USE_COACHING, BATCH, PRIME, SEED, GOAL, START_EPISODE, MAX_EPISODES, CHKPT_EVERY,
                         INIT_TIME_STEPS, INCR_TSTEP_EVERY, FINAL_TIME_STEPS, BAD_STEP_PROB, 
                         USE_NOISE, NOISE_INIT, NOISE_DECAY,
                         ACTOR_LR, CRITIC_LR, ACTOR_NN_L1, ACTOR_NN_L2, CRITIC_NN_L1, CRITIC_NN_L2)
