@@ -73,7 +73,14 @@ def build_and_train_model(env                   : UnityEnvironment,
     # the current time step is represented in the final 112 values.  Within each of these 112 values, the structure is in groups
     # of 8 values, each representing one of 14 visual ray traces emanating out from the agent.  Empirical evidence indicates the
     # following approximate interpretations, which contradicts the explanation from the Unity site:
-    #   Rays ....
+    #   Rays 2, 5, 6, 9, 12, 13 are more or less forward (it seems some may sense different distances rather than the full range);
+    #       5 and 12 are slightly to the left, while 6 and 13 are slightly to the right
+    #   Rays 3, 10 are forward-left
+    #   Rays 1, 8 are forward-right
+    #   Rays 4, 11 are more or less left side
+    #   Rays 0, 7 are more or less right side
+    #   There is a huge blind spot for approx 180 degrees around the rear of the agent.  There is also a small blind spot (at least
+    #   at some distance) between each set of side rays and the next forward set of rays.
     #
     # For each of the rays, its 8 values consist of a 7-long one-hot vector to indicate the type of object it sees, and the last
     # value indicates the distance to that object, in [0, 1).  For the one-ho vector, the values are exactly 1.0 or 0.0.  If a
@@ -369,7 +376,7 @@ def modify_actions(prng         : np.random.Generator, # random number generator
     start = 2*112
 
     # define how often coaching will be injected
-    MOST_OF_TIME = 0.75
+    MOST_OF_TIME = 0.6
 
     # if it is randomly selected then
     if prng.random() < MOST_OF_TIME:

@@ -386,12 +386,16 @@ class AgentMgr:
 
         #.........Update the target NNs for both critics & actors
 
+        # loop on each agent in the problem; it would be cheaper to use a larger update rate (tau), but that is
+        # an approximation for applying the soft udpate multiple times, and it would assume that each agent type
+        # is represented by the same number of agents as all other types
         for t in self.agent_types:
             at = self.agent_types[t]
+            for agent in range(at.num_agents):
 
-            # perform a soft update on the critic & actor target NNs for each agent type
-            self.soft_update(at.critic_policy, at.critic_target)
-            self.soft_update(at.actor_policy, at.actor_target)
+                # perform a soft update on the critic & actor target NNs for each agent type
+                self.soft_update(at.critic_policy, at.critic_target)
+                self.soft_update(at.actor_policy, at.actor_target)
 
     #------------------------------------------------------------------------------
 
