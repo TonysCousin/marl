@@ -251,7 +251,7 @@ def train(mgr               : AgentMgr,         # manages all agents and their l
                 time.sleep(1) #allow time to view the Unity window
 
         # if we have met the winning criterion, save a checkpoint and terminate
-        if ep >= AVG_SCORE_EXTENT  and  avg_score >= training_goal:
+        if ep - starting_episode >= AVG_SCORE_EXTENT  and  avg_score >= training_goal:
             print("\nEnvironment solved in {:d} episodes!\tAverage Score: {:.2f}".format(ep, avg_score))
             mgr.save_checkpoint(CHECKPOINT_PATH, run_name, ep)
             print("\nMost recent individual episode scores:")

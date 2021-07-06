@@ -3,9 +3,6 @@
     must not be changed, as they are defined in the checkpoint file.
 """
 
-import math
-from train_session import USE_COACHING
-
 from unityagents    import UnityEnvironment
 from agent_mgr      import AgentMgr
 from agent_models   import AgentModels
@@ -16,30 +13,30 @@ from random_sampler import RandomSampler
 
 #----------------------------------------------------------------------
 
-RUN_NAME            = "TRAIN9-00" #full name of the run being continued - this identifies the checkpoint file
-START_EPISODE       = 100   #the checkpoint from which training will continue
+RUN_NAME            = "TRAIN13-00" #full name of the run being continued - this identifies the checkpoint file
+START_EPISODE       = 400   #the checkpoint from which training will continue
 
 CHKPT_EVERY         = 100
-PRIME               = 2000  #num random experiences added to the replay buffer before training begins
+PRIME               = 100  #num random experiences added to the replay buffer before training begins
 SEED                = 468   #0, 111, 468, 5555, 23100, 44939
-GOAL                = 0.9   #avg reward needed to be considered a satisfactory solution
-MAX_EPISODES        = 2001  #max num episodes per run
-INIT_TIME_STEPS     = 120
+GOAL                = 0.7   #avg reward needed to be considered a satisfactory solution
+MAX_EPISODES        = 1001  #max num episodes per run
+INIT_TIME_STEPS     = 300
 INCR_TSTEP_EVERY    = 8
 FINAL_TIME_STEPS    = 400
 USE_NOISE           = True
 USE_COACHING        = False
 
-BATCH           = 64
-BAD_STEP_PROB   = 0.04
-NOISE_INIT      = 0.423
-NOISE_DECAY     = 0.999949
-ACTOR_LR        = 0.000037
-CRITIC_LR       = 0.000041
-ACTOR_NN_L1     = 748
-ACTOR_NN_L2     = 187
-CRITIC_NN_L1    = 3072
-CRITIC_NN_L2    = 768
+BATCH           = 128
+BAD_STEP_PROB   = 0.5
+NOISE_INIT      = 0.2
+NOISE_DECAY     = 0.999980
+ACTOR_LR        = 0.000533
+CRITIC_LR       = 0.000587
+ACTOR_NN_L1     = 1024
+ACTOR_NN_L2     = 128
+CRITIC_NN_L1    = 2048
+CRITIC_NN_L2    = 256
 
 # Need to create the Unity env
 env = UnityEnvironment(file_name="/home/starkj/soccer/Soccer_Linux/Soccer.x86_64")
