@@ -235,7 +235,7 @@ def train(mgr               : AgentMgr,         # manages all agents and their l
         # don't compute avg score until several episodes have completed to avoid a meaningless
         # spike in the average near the very beginning
         avg_score = 0.0
-        if ep > 30:
+        if ep - starting_episode > 30:
             avg_score = np.mean(recent_scores)
         max_recent = np.max(recent_scores)
         avg_scores.append(avg_score)
