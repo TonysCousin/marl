@@ -14,10 +14,10 @@ from random_sampler import RandomSampler
 
 #----------------------------------------------------------------------
 
-NAME                = "TRAIN13" #next is 
+NAME                = "TEST" #next is 16
 NUM_RUNS            = 4
 CHKPT_EVERY         = 100
-PRIME               = 2000  #num random experiences added to the replay buffer before training begins
+PRIME               = 2  #num random experiences added to the replay buffer before training begins
 SEED                = 468   #0, 111, 468, 5555, 23100, 44939
 GOAL                = 0.8   #avg reward needed to be considered a satisfactory solution
 EPISODES            = 1001  #max num episodes per run
@@ -30,14 +30,14 @@ USE_COACHING        = True
 # Define the ranges of hyperparams that will be explored
 vars = [
         ["discrete",            32, 64, 128],               # BATCH
-        ["continuous-float",    0.1,        0.2],          # BAD_STEP_PROB
+        ["discrete",            0.9999        ],          # BAD_STEP_PROB
         ["continuous-float",    0.8,         0.95],          # NOISE_INIT
         ["continuous-float",    -5.1,       -4.0],          # log10 of 1-NOISE_DECAY
         ["continuous-float",    -5.0,       -2.0],          # log10 of actor LR (all agent types)
-        ["continuous-float",    -5.0,       -2.0],          # log10 of critic LR (all agent types)
-        ["discrete",            748, 1024],            # ACTOR_NN_L1 num nodes
+        ["continuous-float",    0.05,       0.5],          # multiplier on actor LR to get critic LR
+        ["discrete",            1024],            # ACTOR_NN_L1 num nodes
         ["discrete",            4],                      # ACTOR_NN_L2 divisor (from l1)
-        ["discrete",            1536, 2048, 3072],    # CRITIC_NN_L1 num nodes
+        ["discrete",            3072],    # CRITIC_NN_L1 num nodes
         ["discrete",            4]                       # CRITIC_NN_L2 divisor (from l1)
        ]
 rs = RandomSampler(vars)
@@ -56,7 +56,7 @@ for run in range(NUM_RUNS):
     NOISE_INIT      = v[2]
     NOISE_DECAY     = min((1.0 - math.pow(10.0, v[3])), 0.999995)
     ACTOR_LR        = math.pow(10.0, v[4])
-    CRITIC_LR       = min(math.pow(10.0, v[5]), 0.95*ACTOR_LR)
+    CRITIC_LR       = v[5]*ACTOR_LR
     ACTOR_NN_L1     = v[6]
     ACTOR_NN_L2     = ACTOR_NN_L1 // v[7]
     CRITIC_NN_L1    = v[8]
