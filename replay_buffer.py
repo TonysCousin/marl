@@ -70,7 +70,7 @@ class ReplayBuffer:
                 if self.rewards_exceed_threshold < self.buffer_size//2:
 
                     # while we have a desirable reward at the left end of the deque
-                    while max(self.memory[0].reward) > self.reward_threshold:
+                    while get_max(self.memory[0].reward) > self.reward_threshold:
 
                         # pop it off and push it back onto the right end to save it
                         self.memory.rotate(-1)
@@ -80,6 +80,8 @@ class ReplayBuffer:
 
                 # reduce the prime count since one will be pushed off the left end
                 self.num_primes -= 1
+                if self.num_primes == 0:
+                    print("\n* Replay buffer - all primes flushed out.")
 
         # if number of entries < prime size, then count the entry as a prime
         if len(self.memory) < self.prime_size:
