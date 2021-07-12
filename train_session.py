@@ -1,14 +1,55 @@
-"""Executes a training session that explores the hyperparameter space over several
-    runs with the same model.
+"""Executes a training session for the Unity soccer game that explores
+    the hyperparameter space over several runs with the same model.
 """
+
+# Goalie actions:
+#   0 - move forward
+#   1 - move backward
+#   2 - move right
+#   3 - move left
+#   4 - do nothing
+#
+# Striker actions:
+#   0 - move forward
+#   1 - move backward
+#   2 - turn right
+#   3 - turn left
+#   4 - move left
+#   5 - move right
+#   6 - do nothing
+#
+# State vectors include 3 time steps of 112 values each.  The first 112 are two steps old, the next 112 are one step old, and
+# the current time step is represented in the final 112 values.  Within each of these 112 values, the structure is in groups
+# of 8 values, each representing one of 14 visual ray traces emanating out from the agent.  Empirical evidence indicates the
+# following approximate interpretations, which contradicts the explanation from the Unity site:
+#   Rays 2, 5, 6, 9, 12, 13 are more or less forward (it seems some may sense different distances rather than the full range);
+#       5 and 12 are slightly to the left, while 6 and 13 are slightly to the right
+#   Rays 3, 10 are forward-left
+#   Rays 1, 8 are forward-right
+#   Rays 4, 11 are more or less left side
+#   Rays 0, 7 are more or less right side
+#   There is a huge blind spot for approx 180 degrees around the rear of the agent.  There is also a small blind spot (at least
+#   at some distance) between each set of side rays and the next forward set of rays.
+#
+# For each of the rays, its 8 values consist of a 7-long one-hot vector to indicate the type of object it sees, and the last
+# value indicates the distance to that object, in [0, 1).  For the one-ho vector, the values are exactly 1.0 or 0.0.  If a
+# ray sees nothing then all 8 of its values are 0.0.  The one-hot values (elements 0-6) represent the following:
+#   0 - ball
+#   1 - unused
+#   2 - unused
+#   3 - side wall (does not distinguish which side)
+#   4 - red striker
+#   5 - blue striker
+#   6 - unused
+# It is a shame that there are so many dead values in this state vector. In particular, it would be nice to identify the goals
+# and the goalies.  A striker never has any knowledge where it is relative to the goal it is to shoot at, which seems to be
+# a huge impediment to learning desirable behavior.
+#
 
 import math
 
 from unityagents    import UnityEnvironment
-from agent_mgr      import AgentMgr
-from agent_models   import AgentModels
 from train          import build_and_train_model
-from model          import GoalieActor, GoalieCritic, StrikerActor, StrikerCritic
 from random_sampler import RandomSampler
 
 

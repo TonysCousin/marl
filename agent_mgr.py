@@ -186,15 +186,16 @@ class AgentMgr:
                 self.prev_act[t] = actions
 
                 # reduce the noise probability
-                self.noise_level *= self.noise_decay
-                if self.noise_level <= 0.1  and  not self.noise_reported1:
-                    print("\n* Noise decayed to 0.1")
-                    self.noise_reported1 = True
-                if self.noise_level <= 0.01  and  not self.noise_reported2:
-                    print("\n* Noise decayed to 0.01")
-                    self.noise_reported2 = True
+                if add_noise  or  self.use_noise:
+                    self.noise_level *= self.noise_decay
+                    if self.noise_level <= 0.1  and  not self.noise_reported1:
+                        print("\n* Noise decayed to 0.1")
+                        self.noise_reported1 = True
+                    if self.noise_level <= 0.01  and  not self.noise_reported2:
+                        print("\n* Noise decayed to 0.01")
+                        self.noise_reported2 = True
 
-        else: # must be priming the replay buffer
+        else: # not learning or inference, so must be priming the replay buffer
             for t in self.agent_types:
                 at = self.agent_types[t]
                 actions = self.prng.integers(0, at.max_action_val, at.num_agents)
@@ -205,7 +206,7 @@ class AgentMgr:
     #------------------------------------------------------------------------------
 
     """Stores a new experience from the environment in replay buffer, if appropriate,
-        and advances the agents by one time step.  Also initiates learning, if appropriate.
+        and initiates learning, if appropriate.
 
         Return:  none
     """

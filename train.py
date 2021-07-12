@@ -22,6 +22,35 @@ PRIME_FEEDBACK_INTERVAL = 2000 # num time steps between visual feedback of primi
 
 #----------------------------------------------------------------------
 
+"""Constructs the neural network(s) for the AI model."""
+
+def build_model(actor_lr              : float,
+                critic_lr             : float,
+                actor_nn_l1           : int,
+                actor_nn_l2           : int,
+                critic_nn_l1          : int,
+                critic_nn_l2          : int
+               ):
+
+    # define NNs specifically for the soccer game
+    goalie_states = 336
+    goalie_actions = 5
+    striker_states = 336
+    striker_actions = 7
+    num_agents_in_game = 4 #assumes exactly one discrete action value per agent
+    agent_models = AgentModels()
+    agent_models.add_actor_critic("GoalieBrain", GoalieActor(goalie_states, goalie_actions, fc1_units=actor_nn_l1, fc2_units=actor_nn_l2), 
+                                    GoalieCritic(2*(goalie_states + striker_states), num_agents_in_game, 
+                                    fcs1_units=critic_nn_l1, fc2_units=critic_nn_l2), actor_lr, critic_lr)
+    agent_models.add_actor_critic("StrikerBrain", StrikerActor(striker_states, striker_actions, fc1_units=actor_nn_l1, fc2_units=actor_nn_l2),
+                                    StrikerCritic(2*(goalie_states + striker_states), num_agents_in_game,
+                                    fcs1_units=critic_nn_l1, fc2_units=critic_nn_l2), 
+                                    actor_lr, critic_lr)
+    
+    return agent_models
+
+#----------------------------------------------------------------------
+
 """Defines the model to be trained and executes a brand-new training plan from scratch
     for the specified duration.
 """
@@ -51,69 +80,20 @@ def build_and_train_model(env                   : UnityEnvironment,
                           critic_nn_l2          : int
                          ):
 
-    # define NNs specifically for the soccer game
-    #
-    # Goalie actions:
-    #   0 - move forward
-    #   1 - move backward
-    #   2 - move right
-    #   3 - move left
-    #   4 - do nothing
-    #
-    # Striker actions:
-    #   0 - move forward
-    #   1 - move backward
-    #   2 - turn right
-    #   3 - turn left
-    #   4 - move left
-    #   5 - move right
-    #   6 - do nothing
-    #
-    # State vectors include 3 time steps of 112 values each.  The first 112 are two steps old, the next 112 are one step old, and
-    # the current time step is represented in the final 112 values.  Within each of these 112 values, the structure is in groups
-    # of 8 values, each representing one of 14 visual ray traces emanating out from the agent.  Empirical evidence indicates the
-    # following approximate interpretations, which contradicts the explanation from the Unity site:
-    #   Rays 2, 5, 6, 9, 12, 13 are more or less forward (it seems some may sense different distances rather than the full range);
-    #       5 and 12 are slightly to the left, while 6 and 13 are slightly to the right
-    #   Rays 3, 10 are forward-left
-    #   Rays 1, 8 are forward-right
-    #   Rays 4, 11 are more or less left side
-    #   Rays 0, 7 are more or less right side
-    #   There is a huge blind spot for approx 180 degrees around the rear of the agent.  There is also a small blind spot (at least
-    #   at some distance) between each set of side rays and the next forward set of rays.
-    #
-    # For each of the rays, its 8 values consist of a 7-long one-hot vector to indicate the type of object it sees, and the last
-    # value indicates the distance to that object, in [0, 1).  For the one-ho vector, the values are exactly 1.0 or 0.0.  If a
-    # ray sees nothing then all 8 of its values are 0.0.  The one-hot values (elements 0-6) represent the following:
-    #   0 - ball
-    #   1 - unused
-    #   2 - unused
-    #   3 - side wall (does not distinguish which side)
-    #   4 - red striker
-    #   5 - blue striker
-    #   6 - unused
-    # It is a shame that there are so many dead values in this state vector. In particular, it would be nice to identify the goals
-    # and the goalies.  A striker never has any knowledge where it is relative to the goal it is to shoot at, which seems to be
-    # a huge impediment to learning desirable behavior.
-    #
-    goalie_states = 336
-    goalie_actions = 5
-    striker_states = 336
-    striker_actions = 7
-    num_agents_in_game = 4 #assumes exactly one action value per agent
-    agent_models = AgentModels()
-    agent_models.add_actor_critic("GoalieBrain", GoalieActor(goalie_states, goalie_actions, fc1_units=actor_nn_l1, fc2_units=actor_nn_l2), 
-                                    GoalieCritic(2*(goalie_states + striker_states), num_agents_in_game, 
-                                    fcs1_units=critic_nn_l1, fc2_units=critic_nn_l2), actor_lr, critic_lr)
-    agent_models.add_actor_critic("StrikerBrain", StrikerActor(striker_states, striker_actions, fc1_units=actor_nn_l1, fc2_units=actor_nn_l2),
-                                    StrikerCritic(2*(goalie_states + striker_states), num_agents_in_game,
-                                    fcs1_units=critic_nn_l1, fc2_units=critic_nn_l2), 
-                                    actor_lr, critic_lr)
-    
+    # build the NN models for the agents, using randomly initialized params
+    agent_models = build_model(actor_lr, critic_lr, actor_nn_l1, actor_nn_l2, critic_nn_l1, critic_nn_l2)
+
+    # define the PRNG that is to be used for this whole system
     prng = np.random.default_rng(seed)
 
+    # create the agent manager
     mgr = AgentMgr(env, agent_models, batch_size=batch, buffer_prime=prime, bad_step_prob=bad_step_prob, random_seed=seed,
                     use_noise=use_noise, noise_init=noise_init, noise_decay=noise_decay, prng=prng)
+
+    # if the starting episode is non-zero, then use the agent manager to restore the NN models from an appropriate checkpoint
+    if start_episode > 0:
+        mgr.restore_checkpoint(CHECKPOINT_PATH, name, start_episode)
+
     #print("Haltus")
 
     train(mgr, env, run_name=name, starting_episode=start_episode, max_episodes=episodes, chkpt_interval=chkpt_every, training_goal=goal,
@@ -167,7 +147,7 @@ def train(mgr               : AgentMgr,         # manages all agents and their l
     env_info = env.reset(train_mode=True)
     states = all_agent_states(env_info, agent_types) #initial state vectors after env reset
     while not mgr.is_learning_underway():
-        states, rewards, dones = advance_time_step(mgr, env, False, prng, agent_types, states) #no coaching here
+        states, rewards, dones = learning_time_step(mgr, env, False, prng, agent_types, states) #no coaching here
         if pc % PRIME_FEEDBACK_INTERVAL == 0:
             print(".", end="")
             sys.stdout.flush()
@@ -201,7 +181,7 @@ def train(mgr               : AgentMgr,         # manages all agents and their l
             #print("\n\nTime step ", i, ". states =\n", states)
 
             # advance the MADDPG model and its environment by one time step
-            states, rewards, dones = advance_time_step(mgr, env, use_coaching, prng, agent_types, states)
+            states, rewards, dones = learning_time_step(mgr, env, use_coaching, prng, agent_types, states)
 
             # add this step's reward to the episode score
             score += max_rewards(agent_types, rewards)
@@ -243,13 +223,13 @@ def train(mgr               : AgentMgr,         # manages all agents and their l
         mem_pct = 0.0
         if mem_stats[0] > 0:
             mem_pct = min(100.0*float(mem_stats[1])/mem_stats[0], 99.9)
-        print("\r{} {}\tRunning avg/max: {:.3f}/{:.3f},  mem: {:6d}/{:6d} ({:4.1f}%), avg {:.1f} eps/min   "
+        print("\r{} {}\tRunning avg/max: {:.3f}/{:.3f},  buf: {:6d}/{:6d} ({:4.1f}%), avg {:.2f} eps/min   "
               .format(timestamp, ep, avg_score, max_recent, mem_stats[0], mem_stats[1], mem_pct, 1.0/avg_duration), end="")
         
         # save a checkpoint at planned intervals and print summary performance stats
         if ep > 0  and  ep % chkpt_interval == 0:
             mgr.save_checkpoint(CHECKPOINT_PATH, run_name, ep)
-            print("\r{} {}\tAverage score:   {:.3f},        mem: {:6d}/{:6d} ({:4.1f}%), avg {:.1f} eps/min; {}   "
+            print("\r{} {}\tAverage score:   {:.3f},        buf: {:6d}/{:6d} ({:4.1f}%), avg {:.2f} eps/min; {}   "
                   .format(timestamp, ep, avg_score, mem_stats[0], mem_stats[1], mem_pct, 1.0/avg_duration, time_est_msg))
 
         # if sleeping is chosen, then pause for viewing after selected episodes
@@ -474,21 +454,21 @@ def modify_rewards(types        : {},   # dict of AgentType describing all agent
 #------------------------------------------------------------------------------
 
 """Advances the agent models and the environment to the next time step, passing data
-    between the two as needed. Note that states is both an input and output; this is
-    necessary to preserve its value, even though the caller probably won't need it
-    between calls.
+    between the two as needed for a learning iteration. Note that states is both
+    an input and output; this is necessary to preserve its value, even though the
+    caller probably won't need it between calls.
 
     Returns: tuple of (states, rewards, dones) where each is a dict of agent types
 """
 
-def advance_time_step(model         : AgentMgr,         # manager for all agetns and environment
-                      env           : UnityEnvironment, # the environment object in which all action occurs
-                      use_coaching  : bool,             # will we invoke coaching to modify actions & rewards?
-                      prng          : np.random.Generator,# random number generator
-                      agent_types   : {},               # dict of AgentType
-                      states        : {}                # dict of current states; each entry represents an agent type,
-                                                        #   which is ndarray[num_agents, x]
-                     ):
+def learning_time_step(model         : AgentMgr,         # manager for all agetns and environment
+                       env           : UnityEnvironment, # the environment object in which all action occurs
+                       use_coaching  : bool,             # will we invoke coaching to modify actions & rewards?
+                       prng          : np.random.Generator,# random number generator
+                       agent_types   : {},               # dict of AgentType
+                       states        : {}                # dict of current states; each entry represents an agent type,
+                                                         #   which is ndarray[num_agents, x]
+                      ):
 
     # Predict the best actions for the current state and store them in a single ndarray
     actions = model.act(states) #returns dict of ndarray, with each entry having one item for each agent
@@ -507,6 +487,37 @@ def advance_time_step(model         : AgentMgr,         # manager for all agetns
 
     # update the agents with this new info
     model.step(states, actions, rewards, next_states, dones) 
+
+    # roll over new state
+    states = next_states
+
+    return (states, rewards, dones)
+
+#------------------------------------------------------------------------------
+
+"""Advances the agent models and the environment to the next time step, passing data
+    between the two as needed for simple inference. Note that states is both
+    an input and output; this is necessary to preserve its value, even though the
+    caller probably won't need it between calls.
+
+    Returns: tuple of (states, rewards, dones) where each is a dict of agent types
+"""
+
+def inference_time_step(model         : AgentMgr,         # manager for all agetns and environment
+                        env           : UnityEnvironment, # the environment object in which all action occurs
+                        agent_types   : {},               # dict of AgentType
+                        states        : {}                # dict of current states; each entry represents an agent type,
+                                                          #   which is ndarray[num_agents, x]
+                       ):
+
+    # Predict the best actions for the current state and store them in a single ndarray
+    actions = model.act(states) #returns dict of ndarray, with each entry having one item for each agent
+
+    # get the new state & reward based on this action
+    ea = copy.deepcopy(actions) # disposable copy because env.step() changes the elements to lists!
+    env_info = env.step(ea)
+    next_states = all_agent_states(env_info, agent_types)
+    rewards, dones = all_agent_results(env_info, agent_types)
 
     # roll over new state
     states = next_states

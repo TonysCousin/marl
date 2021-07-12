@@ -13,23 +13,23 @@ from random_sampler import RandomSampler
 
 #----------------------------------------------------------------------
 
-RUN_NAME            = "TRAIN14-01" #full name of the run being continued - this identifies the checkpoint file
-START_EPISODE       = 900   #the checkpoint from which training will continue
+RUN_NAME            = "TRAIN15-00" #full name of the run being continued - this identifies the checkpoint file
+START_EPISODE       = 700   #the checkpoint from which training will continue
 
 CHKPT_EVERY         = 100
 PRIME               = 1000  #num random experiences added to the replay buffer before training begins
 SEED                = 468   #0, 111, 468, 5555, 23100, 44939
 GOAL                = 0.7   #avg reward needed to be considered a satisfactory solution
 MAX_EPISODES        = 2001  #max num episodes per run
-INIT_TIME_STEPS     = 300
+INIT_TIME_STEPS     = 200
 INCR_TSTEP_EVERY    = 8
 FINAL_TIME_STEPS    = 400
 USE_NOISE           = True
 USE_COACHING        = False
 
-BATCH           = 128
-BAD_STEP_PROB   = 0.5
-NOISE_INIT      = 0.1
+BATCH           = 32
+BAD_STEP_PROB   = 0.8
+NOISE_INIT      = 0.15
 NOISE_DECAY     = 0.999990
 ACTOR_LR        = 0.003179
 CRITIC_LR       = 0.000095
