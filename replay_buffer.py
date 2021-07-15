@@ -17,6 +17,65 @@ from utils      import get_max
 Experience = namedtuple("Experience", field_names=["state", "action", "reward", "next_state", "done"])
 
 
+
+#------------------------------------------------------------------------------
+
+def debug_actions(types, actions, states, flag):
+        for t in types:
+            for agent in range(states[t].shape[0]):
+
+                # get each of the 14 ray traces from the current time step & see if first element indicates it sees the ball
+                start = 2*112
+                is_ball = np.empty(14, dtype=bool)
+                for ray in range(14):
+                    is_ball[ray] = states[t][agent, start + 8*ray] > 0.5 #first element in each 8-element ray indicates it sees the ball
+                
+                # if it sees the ball to the left
+                if is_ball[4]  or  is_ball[11]  or  is_ball[3]  or  is_ball[10]:
+                    print("{}\t{}: Ball left\tAction {}{}".format(t, agent, actions[t][agent], flag))
+                
+                # if it sees the ball to the right
+                elif is_ball[0]  or  is_ball[7]  or  is_ball[8]  or  is_ball[1]:
+                    print("{}\t{}: Ball right\tAction {}{}".format(t, agent, actions[t][agent], flag))
+                
+                # if it sees the ball in front
+                elif is_ball[12]  or  is_ball[13]  or  is_ball[2]  or  is_ball[5]  or is_ball[6]  or  is_ball[9]:
+                    print("{}\t{}: Ball fwd\tAction {}{}".format(t, agent, actions[t][agent], flag))
+
+                # else we don't know where the ball is
+                else:
+                    print("{}\t{}: Ball unknown\tAction {}{}".format(t, agent, actions[t][agent], flag))
+                
+def debug_actions_tensor(types, actions, states, flag):
+        for t in types:
+            for sample in range(states[t].shape[0]):
+                print("...sample {}:".format(sample))
+                for agent in range(states[t].shape[1]):
+
+                    # get each of the 14 ray traces from the current time step & see if first element indicates it sees the ball
+                    start = 2*112
+                    is_ball = np.empty(14, dtype=bool)
+                    for ray in range(14):
+                        is_ball[ray] = states[t][sample, agent, start + 8*ray] > 0.5 #first element in each 8-element ray indicates it sees the ball
+                    
+                    # if it sees the ball to the left
+                    if is_ball[4]  or  is_ball[11]  or  is_ball[3]  or  is_ball[10]:
+                        print("{}\t{}: Ball left\tAction {}{}".format(t, agent, actions[t][sample, agent], flag))
+                    
+                    # if it sees the ball to the right
+                    elif is_ball[0]  or  is_ball[7]  or  is_ball[8]  or  is_ball[1]:
+                        print("{}\t{}: Ball right\tAction {}{}".format(t, agent, actions[t][sample, agent], flag))
+                    
+                    # if it sees the ball in front
+                    elif is_ball[12]  or  is_ball[13]  or  is_ball[2]  or  is_ball[5]  or is_ball[6]  or  is_ball[9]:
+                        print("{}\t{}: Ball fwd\tAction {}{}".format(t, agent, actions[t][sample, agent], flag))
+
+                    # else we don't know where the ball is
+                    else:
+                        print("{}\t{}: Ball unknown\tAction {}{}".format(t, agent, actions[t][sample, agent], flag))
+                
+
+
 class ReplayBuffer:
 
     """ Initialize a ReplayBuffer object."""
@@ -48,6 +107,14 @@ class ReplayBuffer:
 
     #------------------------------------------------------------------------------
 
+        #TODO:  this section for debug only!
+        self.agent_types = None
+
+    def store_types(self, t):
+        self.agent_types = t
+
+    #------------------------------------------------------------------------------
+
     """Add a new experience to memory."""
 
     def add(self,
@@ -59,6 +126,16 @@ class ReplayBuffer:
              next_states    : {},           # dict of next states after actions are taken; each entry an agent type
              dones          : {}            # dict of done flags, each entry an agent type, which is a list of bools
            ):
+
+
+
+
+        print("replay_buffer.add():")
+        debug_actions(self.agent_types, actions, states, " ")
+
+
+
+
 
         # if the buffer is already full then (we don't want to lose good experiences)
         if len(self.memory) == self.buffer_size:
@@ -188,6 +265,15 @@ class ReplayBuffer:
                     rewards[agent_type] = tr
                     next_states[agent_type] = tn
                     dones[agent_type] = td
+
+
+
+                #TODO debug only
+                print("replay_buffer.sample():")
+                debug_actions_tensor(self.agent_types, actions, states, " ")
+
+
+
 
                 return (states, actions, rewards, next_states, dones)
 

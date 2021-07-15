@@ -58,19 +58,19 @@ from random_sampler import RandomSampler
 NAME                = "TEST" #next is 16
 NUM_RUNS            = 4
 CHKPT_EVERY         = 100
-PRIME               = 2  #num random experiences added to the replay buffer before training begins
+PRIME               = 0  #num random experiences added to the replay buffer before training begins
 SEED                = 468   #0, 111, 468, 5555, 23100, 44939
 GOAL                = 0.8   #avg reward needed to be considered a satisfactory solution
 EPISODES            = 1001  #max num episodes per run
-INIT_TIME_STEPS     = 120
-INCR_TSTEP_EVERY    = 8
+INIT_TIME_STEPS     = 5
+INCR_TSTEP_EVERY    = 1
 FINAL_TIME_STEPS    = 400
-USE_NOISE           = True
-USE_COACHING        = True
+USE_NOISE           = False
+USE_COACHING        = False
 
 # Define the ranges of hyperparams that will be explored
 vars = [
-        ["discrete",            32, 64, 128],               # BATCH
+        ["discrete",            1], #32, 64, 128],               # BATCH
         ["discrete",            0.9999        ],          # BAD_STEP_PROB
         ["continuous-float",    0.8,         0.95],          # NOISE_INIT
         ["continuous-float",    -5.1,       -4.0],          # log10 of 1-NOISE_DECAY

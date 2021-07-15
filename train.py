@@ -157,7 +157,7 @@ def train(mgr               : AgentMgr,         # manages all agents and their l
             states = all_agent_states(env_info, agent_types)
 
     timestamp = time.strftime("%a %H:%M")
-    print("!\nTraining underway at {}".format(timestamp))
+    print("!\n\n\n///// Training underway at {}".format(timestamp))
     sys.stdout.flush()
 
     # loop on episodes for training
@@ -372,7 +372,6 @@ def modify_actions(prng         : np.random.Generator, # random number generator
             for agent in range(states[t].shape[0]):
 
                 # get each of the 14 ray traces from the current time step & see if first element indicates it sees the ball
-                ray_state = np.empty(8)
                 is_ball = np.empty(14, dtype=bool)
                 for ray in range(14):
                     is_ball[ray] = states[t][agent, start + 8*ray] > 0.5 #first element in each 8-element ray indicates it sees the ball
@@ -453,6 +452,39 @@ def modify_rewards(types        : {},   # dict of AgentType describing all agent
 
 #------------------------------------------------------------------------------
 
+def debug_actions(types, actions, states, flag):
+        
+    print("\n-----  entering learning_time_step:")
+    for t in types:
+        for agent in range(states[t].shape[0]):
+
+            # get each of the 14 ray traces from the current time step & see if first element indicates it sees the ball
+            start = 2*112
+            is_ball = np.empty(14, dtype=bool)
+            for ray in range(14):
+                is_ball[ray] = states[t][agent, start + 8*ray] > 0.5 #first element in each 8-element ray indicates it sees the ball
+            
+            # if it sees the ball to the left
+            if is_ball[4]  or  is_ball[11]  or  is_ball[3]  or  is_ball[10]:
+                print("{}\t{}: Ball left\tAction {}{}".format(t, agent, actions[t][agent], flag))
+            
+            # if it sees the ball to the right
+            elif is_ball[0]  or  is_ball[7]  or  is_ball[8]  or  is_ball[1]:
+                print("{}\t{}: Ball right\tAction {}{}".format(t, agent, actions[t][agent], flag))
+            
+            # if it sees the ball in front
+            elif is_ball[12]  or  is_ball[13]  or  is_ball[2]  or  is_ball[5]  or is_ball[6]  or  is_ball[9]:
+                print("{}\t{}: Ball fwd\tAction {}{}".format(t, agent, actions[t][agent], flag))
+
+            # else we don't know where the ball is
+            else:
+                print("{}\t{}: Ball unknown\tAction {}{}".format(t, agent, actions[t][agent], flag))
+            
+    print(" ")
+
+
+#------------------------------------------------------------------------------
+
 """Advances the agent models and the environment to the next time step, passing data
     between the two as needed for a learning iteration. Note that states is both
     an input and output; this is necessary to preserve its value, even though the
@@ -472,8 +504,11 @@ def learning_time_step(model         : AgentMgr,         # manager for all agetn
 
     # Predict the best actions for the current state and store them in a single ndarray
     actions = model.act(states) #returns dict of ndarray, with each entry having one item for each agent
+    coaching_flag = " "
     if use_coaching:
         actions = modify_actions(prng, agent_types, actions, states)
+        coaching_flag = "*"
+    debug_actions(agent_types, actions, states, coaching_flag)
 
     # get the new state & reward based on this action
     ea = copy.deepcopy(actions) # disposable copy because env.step() changes the elements to lists!

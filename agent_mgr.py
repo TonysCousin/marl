@@ -32,6 +32,39 @@ MOST_OF_TIME = 0.75
 REWARD_THRESHOLD = 0.1 #only allows experiences with a goal scored
 
 
+
+#------------------------------------------------------------------------------
+
+def debug_actions(types, actions, states, flag):
+        for t in types:
+            for agent in range(states[t].shape[0]):
+
+                # get each of the 14 ray traces from the current time step & see if first element indicates it sees the ball
+                start = 2*112
+                is_ball = np.empty(14, dtype=bool)
+                for ray in range(14):
+                    is_ball[ray] = states[t][agent, start + 8*ray] > 0.5 #first element in each 8-element ray indicates it sees the ball
+                
+                # if it sees the ball to the left
+                if is_ball[4]  or  is_ball[11]  or  is_ball[3]  or  is_ball[10]:
+                    print("{}\t{}: Ball left\tAction {}{}".format(t, agent, actions[t][agent], flag))
+                
+                # if it sees the ball to the right
+                elif is_ball[0]  or  is_ball[7]  or  is_ball[8]  or  is_ball[1]:
+                    print("{}\t{}: Ball right\tAction {}{}".format(t, agent, actions[t][agent], flag))
+                
+                # if it sees the ball in front
+                elif is_ball[12]  or  is_ball[13]  or  is_ball[2]  or  is_ball[5]  or is_ball[6]  or  is_ball[9]:
+                    print("{}\t{}: Ball fwd\tAction {}{}".format(t, agent, actions[t][agent], flag))
+
+                # else we don't know where the ball is
+                else:
+                    print("{}\t{}: Ball unknown\tAction {}{}".format(t, agent, actions[t][agent], flag))
+                
+
+
+
+
 class AgentMgr:
 
     """Initialize the AgentMgr using a pre-established environment model."""
@@ -107,6 +140,10 @@ class AgentMgr:
         
         # define simple experience replay buffer common to all agents
         self.erb = ReplayBuffer(buffer_size, batch_size, buffer_prime, REWARD_THRESHOLD, self.prng)
+
+
+
+        self.erb.store_types(self.agent_types) #TODO: debug only!
 
     #------------------------------------------------------------------------------
 
@@ -220,6 +257,12 @@ class AgentMgr:
              next_states    : {},           # dict of next states after actions are taken; each entry an agent type
              dones          : {}            # dict of done flags, each entry an agent type, which is a list of bools
             ):
+
+        
+
+        print("step():")
+        debug_actions(self.agent_types, actions, states, " ")
+
         
         # set up probability of keeping bad experiences based upon whether the buffer is
         # full enough to start learning
@@ -345,8 +388,8 @@ class AgentMgr:
             q_targets_next = at.critic_target(next_states_all, target_actions).squeeze()
 
             # prepare the rewards & dones for the agent type
-            r = rewards[t].squeeze().to(DEVICE)
-            d = dones[t].squeeze().to(DEVICE)
+            r = rewards[t].squeeze(2).to(DEVICE)
+            d = dones[t].squeeze(2).to(DEVICE)
 
             for agent in range(at.num_agents):
 
@@ -481,7 +524,7 @@ class AgentMgr:
             at.critic_policy.load_state_dict(checkpoint[key_c])
             at.critic_opt.load_state_dict(checkpoint[key_oc])
 
-        print("Checkpoint loaded for {}, episode {}".format(name, episode))
+        print("Checkpoint loaded from {}".format(filename))
 
     #------------------------------------------------------------------------------
 
