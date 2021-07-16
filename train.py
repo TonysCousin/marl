@@ -546,7 +546,7 @@ def inference_time_step(model         : AgentMgr,         # manager for all aget
                        ):
 
     # Predict the best actions for the current state and store them in a single ndarray
-    actions = model.act(states) #returns dict of ndarray, with each entry having one item for each agent
+    actions = model.act(states, is_inference=True) #returns dict of ndarray, with each entry having one item for each agent
 
     # get the new state & reward based on this action
     ea = copy.deepcopy(actions) # disposable copy because env.step() changes the elements to lists!
