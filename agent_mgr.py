@@ -47,7 +47,7 @@ def debug_actions(types, actions, states, flag):
                 
                 # if it sees the ball to the left
                 if is_ball[4]  or  is_ball[11]  or  is_ball[3]  or  is_ball[10]:
-                    print("{}\t{}: Ball left\tAction {}{}".format(t, np.argmax(agent, actions[t][agent]), flag))
+                    print("{}\t{}: Ball left\tAction {}{}".format(t, agent, np.argmax(actions[t][agent]), flag))
                 
                 # if it sees the ball to the right
                 elif is_ball[0]  or  is_ball[7]  or  is_ball[8]  or  is_ball[1]:
@@ -110,7 +110,7 @@ class AgentMgr:
             brain = env.brains[name]
             type_info = env_info[name]
             ns = len(type_info.vector_observations[0])
-            max_a = brain.vector_action_space_size
+            na = brain.vector_action_space_size
             num_agents = len(type_info.agents)
             actor = agent_models.get_actor_nn_for(name)
             critic = agent_models.get_critic_nn_for(name)
@@ -118,7 +118,7 @@ class AgentMgr:
             critic_lr = agent_models.get_critic_lr_for(name)
             actor_weight_decay = agent_models.get_actor_weight_decay_for(name)
             critic_weight_decay = agent_models.get_critic_weight_decay_for(name)
-            self.agent_types[name] = AgentType(DEVICE, name, brain, ns, max_a, num_agents, actor, critic,
+            self.agent_types[name] = AgentType(DEVICE, name, brain, ns, na, num_agents, actor, critic,
                                                actor_lr, critic_lr, actor_weight_decay, critic_weight_decay)
         
         # initialize other internal stuff
@@ -210,7 +210,7 @@ class AgentMgr:
         if self.learning_underway  or  is_inference:
             for t in self.agent_types:
                 at = self.agent_types[t]
-                actions = np.empty((at.num_agents, at.num_actions), dtype=float) #one row for each agent of this type
+                actions = np.empty((at.num_agents, at.action_size), dtype=float) #one row for each agent of this type
                 at.actor_policy.eval()
 
                 for i in range(at.num_agents):
@@ -229,7 +229,7 @@ class AgentMgr:
                             
                             # otherwise, let's pick a truly random action to have fun with
                             else:
-                                actions[i, :] = self.prng.random(at.num_actions)
+                                actions[i, :] = self.prng.random(at.action_size)
 
                             noise_added = True
 
@@ -237,7 +237,7 @@ class AgentMgr:
                     if not noise_added:
                         s = torch.from_numpy(states[t][i]).float().to(DEVICE)
                         with torch.no_grad():
-                            actions[i] = at.actor_policy(s) #returns a tensor ON DEVICE representing all possible actions for this agent
+                            actions[i] = at.actor_policy(s).cpu().data.numpy() #returns an array representing all possible actions for this agent
 
                 at.actor_policy.train()
 
@@ -257,9 +257,9 @@ class AgentMgr:
         else: # not learning or inference, so must be priming the replay buffer
             for t in self.agent_types:
                 at = self.agent_types[t]
-                actions = np.empty((at.num_agents, at.num_actions), dtype=float) #one row for each agent of this type
+                actions = np.empty((at.num_agents, at.action_size), dtype=float) #one row for each agent of this type
                 for i in range(at.num_agents):
-                    actions[i, :] = self.prng.random(at.num_actions)
+                    actions[i, :] = self.prng.random(at.action_size)
                 act[t] = actions
 
         return act
@@ -269,15 +269,25 @@ class AgentMgr:
     """Given a vector of possible action choices, it returns the best action (the
         index of the element with the largest score).
 
-        Return:  integer index of the best action (on cpu)
+        Return:  dict of ndarrays holding integer index of the best action for each agent (on cpu)
     """
 
     def find_best_action(self,
-                         action_vector  : torch.Tensor  # vector of raw values for each possible action ON DEVICE
+                         action_vector  : {}    # dict of ndarrays of raw values for each possible action;
+                                                #   each entry is of shape [a, x], one row for each agent of that type
                         ):
         
-        vec = action_vector.cpu().data.numpy()
-        best = np.argmax(vec)
+        best = {}
+        
+        for t in self.agent_types:
+            at = self.agent_types[t]
+            actions = np.empty(at.num_agents, dtype=int)
+            for agent in range(at.num_agents):
+                vec = action_vector[t][agent, :]
+                actions[agent] = np.argmax(vec)
+            best[t] = actions
+        
+        return best
 
     #------------------------------------------------------------------------------
 
@@ -305,7 +315,7 @@ class AgentMgr:
         
         # set up probability of keeping bad experiences based upon whether the buffer is
         # full enough to start learning
-        if len(self.erb) > max(self.batch_size, self.buffer_prime_size):
+        if len(self.erb) >= max(self.batch_size, self.buffer_prime_size):
             random_threshold = self.bad_step_keep_prob
             self.learning_underway = True
         else:
@@ -353,6 +363,8 @@ class AgentMgr:
         weighted toward those types with the most individual agents. Therefore, types with few agents may be better
         trained for multiple iterations at each training step, in order to keep total learning iterations on the
         models more-or-less even across all NN models.
+
+        Return:  none
     """
 
     def learn(self,
@@ -399,21 +411,19 @@ class AgentMgr:
 
                 # grab next state vectors and use this agent's target network to predict next actions
                 ns = next_states[t][:, agent, :]
-                raw = at.actor_target(ns).cpu().detach().numpy()
-                ta = torch.from_numpy(np.argmax(raw, axis=1)).float()
+                ta = at.actor_target(ns).detach() #vector of all possible actions
 
                 # grab current state vector and use this agent's current policy to decide current actions
                 cs = states[t][:, agent, :]
-                raw = at.actor_policy(cs).cpu().detach().numpy()
-                ca = torch.from_numpy(np.argmax(raw, axis=1)).float()
+                ca = at.actor_policy(cs).detach() #vector of all possbile actions
 
                 if first:
-                    target_actions = ta.unsqueeze(1).to(DEVICE)
-                    cur_actions = ca.unsqueeze(1).to(DEVICE)
+                    target_actions = ta
+                    cur_actions = ca
                     first = False
                 else:
-                    target_actions = torch.cat((target_actions, ta.unsqueeze(1)), dim=1)
-                    cur_actions = torch.cat((cur_actions, ca.unsqueeze(1)), dim=1)
+                    target_actions = torch.cat((target_actions, ta), dim=1)
+                    cur_actions = torch.cat((cur_actions, ca), dim=1)
                 
                 # resulting target_actions and cur_actions tensors are of shape [b, z], where z is the
                 # sum of all agents' action spaces for that agent type (all agents are represented in each row)

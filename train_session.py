@@ -66,7 +66,7 @@ INIT_TIME_STEPS     = 5
 INCR_TSTEP_EVERY    = 1
 FINAL_TIME_STEPS    = 400
 USE_NOISE           = False
-USE_COACHING        = False
+USE_COACHING        = True
 
 # Define the ranges of hyperparams that will be explored
 vars = [

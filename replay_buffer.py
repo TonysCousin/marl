@@ -21,58 +21,63 @@ Experience = namedtuple("Experience", field_names=["state", "action", "reward", 
 #------------------------------------------------------------------------------
 
 def debug_actions(types, actions, states, flag):
+    for t in types:
+        for agent in range(states[t].shape[0]):
+
+            # get each of the 14 ray traces from the current time step & see if first element indicates it sees the ball
+            start = 2*112
+            is_ball = np.empty(14, dtype=bool)
+            for ray in range(14):
+                is_ball[ray] = states[t][agent, start + 8*ray] > 0.5 #first element in each 8-element ray indicates it sees the ball
+            
+            # if it sees the ball to the left
+            if is_ball[4]  or  is_ball[11]  or  is_ball[3]  or  is_ball[10]:
+                print("{}\t{}: Ball left\tAction {}{}".format(t, agent, np.argmax(actions[t][agent]), flag))
+            
+            # if it sees the ball to the right
+            elif is_ball[0]  or  is_ball[7]  or  is_ball[8]  or  is_ball[1]:
+                print("{}\t{}: Ball right\tAction {}{}".format(t, agent, np.argmax(actions[t][agent]), flag))
+            
+            # if it sees the ball in front
+            elif is_ball[12]  or  is_ball[13]  or  is_ball[2]  or  is_ball[5]  or is_ball[6]  or  is_ball[9]:
+                print("{}\t{}: Ball fwd\tAction {}{}".format(t, agent, np.argmax(actions[t][agent]), flag))
+
+            # else we don't know where the ball is
+            else:
+                print("{}\t{}: Ball unknown\tAction {}{}".format(t, agent, np.argmax(actions[t][agent]), flag))
+                
+def debug_actions_tensor(types, actions, states, flag):
+    first_key = list(types.keys())[0]
+    for sample in range(states[first_key].shape[0]): #loop over number of samples in the batch
+        print("...sample {}:".format(sample))
         for t in types:
-            for agent in range(states[t].shape[0]):
+            for agent in range(states[t].shape[1]):
 
                 # get each of the 14 ray traces from the current time step & see if first element indicates it sees the ball
                 start = 2*112
                 is_ball = np.empty(14, dtype=bool)
                 for ray in range(14):
-                    is_ball[ray] = states[t][agent, start + 8*ray] > 0.5 #first element in each 8-element ray indicates it sees the ball
+                    is_ball[ray] = states[t][sample, agent, start + 8*ray] > 0.5 #first element in each 8-element ray indicates it sees the ball
                 
                 # if it sees the ball to the left
                 if is_ball[4]  or  is_ball[11]  or  is_ball[3]  or  is_ball[10]:
-                    print("{}\t{}: Ball left\tAction {}{}".format(t, agent, np.argmax(actions[t][agent]), flag))
+                    print("{}\t{}: Ball left\tAction ".format(t, agent), end="")
                 
                 # if it sees the ball to the right
                 elif is_ball[0]  or  is_ball[7]  or  is_ball[8]  or  is_ball[1]:
-                    print("{}\t{}: Ball right\tAction {}{}".format(t, agent, np.argmax(actions[t][agent]), flag))
+                    print("{}\t{}: Ball right\tAction ".format(t, agent), end="")
                 
                 # if it sees the ball in front
                 elif is_ball[12]  or  is_ball[13]  or  is_ball[2]  or  is_ball[5]  or is_ball[6]  or  is_ball[9]:
-                    print("{}\t{}: Ball fwd\tAction {}{}".format(t, agent, np.argmax(actions[t][agent]), flag))
+                    print("{}\t{}: Ball fwd\tAction ".format(t, agent), end="")
 
                 # else we don't know where the ball is
                 else:
-                    print("{}\t{}: Ball unknown\tAction {}{}".format(t, agent, np.argmax(actions[t][agent]), flag))
-                
-def debug_actions_tensor(types, actions, states, flag):
-        for t in types:
-            for sample in range(states[t].shape[0]):
-                print("...sample {}:".format(sample))
-                for agent in range(states[t].shape[1]):
+                    print("{}\t{}: Ball unknown\tAction ".format(t, agent), end="")
 
-                    # get each of the 14 ray traces from the current time step & see if first element indicates it sees the ball
-                    start = 2*112
-                    is_ball = np.empty(14, dtype=bool)
-                    for ray in range(14):
-                        is_ball[ray] = states[t][sample, agent, start + 8*ray] > 0.5 #first element in each 8-element ray indicates it sees the ball
-                    
-                    # if it sees the ball to the left
-                    if is_ball[4]  or  is_ball[11]  or  is_ball[3]  or  is_ball[10]:
-                        print("{}\t{}: Ball left\tAction {}{}".format(t, agent, np.argmax(actions[t][sample, agent].numpy()), flag))
-                    
-                    # if it sees the ball to the right
-                    elif is_ball[0]  or  is_ball[7]  or  is_ball[8]  or  is_ball[1]:
-                        print("{}\t{}: Ball right\tAction {}{}".format(t, agent, np.argmax(actions[t][sample, agent].numpy()), flag))
-                    
-                    # if it sees the ball in front
-                    elif is_ball[12]  or  is_ball[13]  or  is_ball[2]  or  is_ball[5]  or is_ball[6]  or  is_ball[9]:
-                        print("{}\t{}: Ball fwd\tAction {}{}".format(t, agent, np.argmax(actions[t][sample, agent].numpy()), flag))
-
-                    # else we don't know where the ball is
-                    else:
-                        print("{}\t{}: Ball unknown\tAction {}{}".format(t, agent, np.argmax(actions[t][sample, agent].numpy()), flag))
+                for j in range(actions[t].shape[2]):
+                    print("{:6.4f} ".format(actions[t][sample, agent, j]), end="")
+                print("")
                 
 
 
@@ -231,7 +236,7 @@ class ReplayBuffer:
                 #           2..reward
                 #           3..next_state
                 #           4..done
-                e0 = experiences[0]
+                e0 = experiences[0] #experiences is a list of length batch size
                 for agent_type in e0[0]:
 
                     # get num agents of this type (assume the same number of agents is represented in each element)

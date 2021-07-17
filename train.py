@@ -34,13 +34,15 @@ def build_model(actor_lr              : float,
 
     # TODO: this info should be gotten from the AgentTypes objects
 
-    # define NNs specifically for the soccer game
+    # define NNs specifically for the soccer game (could add one extra action for each agent type, which is "do nothing";
+    #   this hack works with this environment, but doing so requires changing code in AgentMgr.__init__ to not get the
+    #   number of actions from the environment directly)
     goalie_states = 336
-    goalie_actions = 5
+    goalie_actions = 4
     num_goalie_agents = 2
 
     striker_states = 336
-    striker_actions = 7
+    striker_actions = 6
     num_striker_agents = 2
 
     total_states = num_goalie_agents*goalie_states + num_striker_agents*striker_states
@@ -346,19 +348,21 @@ def max_rewards(types: {},  # dict of AgentType describing all agent types
     move left; and if it sees the ball in front it is encouranged to move forward.
     Encouragement is in the form of an action override "most of the time".
 
-    Return: updated actions dict.
+    Return: tuple of (updated actions dict, bool indicating whether updates were done)
 """
 
 def modify_actions(prng         : np.random.Generator, # random number generator
                    types        : {},   # dict of AgentType describing all agent types
-                   actions      : {},   # dict of arrays of commanded actons for each agent of each type
+                   actions      : {},   # dict of arrays of all possible action scores for each agent of each type
                    states       : {}    # dict of current states for each agent type; each entry is
                                         # ndarray[n, x], where n is number of agents of that type
                   ):
+
+    mods_done = False
     
     # if the prng has not been defined then we can't do anything here
     if prng == None:
-        return actions
+        return (actions, mods_done)
 
     # observe the final 112 elements of the state vector, which is the current time step
     start = 2*112
@@ -383,26 +387,30 @@ def modify_actions(prng         : np.random.Generator, # random number generator
                 is_ball = np.empty(14, dtype=bool)
                 for ray in range(14):
                     is_ball[ray] = states[t][agent, start + 8*ray] > 0.5 #first element in each 8-element ray indicates it sees the ball
-                
+
+                # find the current largest vector element and its value                
+                am = np.argmax(actions[t][agent])
+                max_val = actions[t][agent, am]
+
                 # if it sees the ball to the left
                 if is_ball[4]  or  is_ball[11]  or  is_ball[3]  or  is_ball[10]:
-                    action = ball_left_action[t]
+                    actions[t][agent, ball_left_action[t]] = max_val + 0.0001 #this is now the largest value in the vector
                 
                 # if it sees the ball to the right
                 elif is_ball[0]  or  is_ball[7]  or  is_ball[8]  or  is_ball[1]:
-                    action = ball_right_action[t]
+                    actions[t][agent, ball_right_action[t]] = max_val + 0.0001 #this is now the largest value in the vector
                 
                 # if it sees the ball in front
                 elif is_ball[12]  or  is_ball[13]  or  is_ball[2]  or  is_ball[5]  or is_ball[6]  or  is_ball[9]:
-                    action = ball_forward_action[t]
+                    actions[t][agent, ball_forward_action[t]] = max_val + 0.0001 #this is now the largest value in the vector
 
                 # else we don't know where the ball is
                 else:
-                    action = ball_unknown_action[t]
+                    actions[t][agent, ball_unknown_action[t]] = max_val + 0.0001 #this is now the largest value in the vector
+        
+        mods_done = True
 
-                actions[t][agent] = action
-
-    return actions
+    return (actions, mods_done)
 
 #------------------------------------------------------------------------------
 
@@ -474,19 +482,19 @@ def debug_actions(types, actions, states, flag):
             
             # if it sees the ball to the left
             if is_ball[4]  or  is_ball[11]  or  is_ball[3]  or  is_ball[10]:
-                print("{}\t{}: Ball left\tAction {}{}".format(t, agent, np.argmax(actions[t][agent]), flag))
+                print("{}\t{}: Ball left\tAction {}{}".format(t, agent, actions[t][agent], flag))
             
             # if it sees the ball to the right
             elif is_ball[0]  or  is_ball[7]  or  is_ball[8]  or  is_ball[1]:
-                print("{}\t{}: Ball right\tAction {}{}".format(t, agent, np.argmax(actions[t][agent]), flag))
+                print("{}\t{}: Ball right\tAction {}{}".format(t, agent, actions[t][agent], flag))
             
             # if it sees the ball in front
             elif is_ball[12]  or  is_ball[13]  or  is_ball[2]  or  is_ball[5]  or is_ball[6]  or  is_ball[9]:
-                print("{}\t{}: Ball fwd\tAction {}{}".format(t, agent, np.argmax(actions[t][agent]), flag))
+                print("{}\t{}: Ball fwd\tAction {}{}".format(t, agent, actions[t][agent], flag))
 
             # else we don't know where the ball is
             else:
-                print("{}\t{}: Ball unknown\tAction {}{}".format(t, agent, np.argmax(actions[t][agent]), flag))
+                print("{}\t{}: Ball unknown\tAction {}{}".format(t, agent, actions[t][agent], flag))
             
     print(" ")
 
@@ -511,11 +519,13 @@ def learning_time_step(model         : AgentMgr,         # manager for all agetn
                       ):
 
     # Predict the best actions for the current state and store them in a single ndarray
-    actions = model.act(states) #returns dict of ndarray, with each entry having one item for each agent
+    av = model.get_raw_action_vector(states) #returns dict of ndarray, with each entry having a row for each agent (scores for all possible actions)
     coaching_flag = " "
     if use_coaching:
-        actions = modify_actions(prng, agent_types, actions, states)
-        coaching_flag = "*"
+        actions, was_coached = modify_actions(prng, agent_types, av, states)
+        if was_coached:
+            coaching_flag = "*"
+    actions = model.find_best_action(av)
     debug_actions(agent_types, actions, states, coaching_flag) #takes in actions as integer values (one per agent)
 
     # get the new state & reward based on this action
@@ -528,8 +538,8 @@ def learning_time_step(model         : AgentMgr,         # manager for all agetn
     if use_coaching:
         rewards = modify_rewards(agent_types, rewards, next_states)
 
-    # update the agents with this new info
-    model.step(states, actions, rewards, next_states, dones) 
+    # update the agents with this new info (need to pass raw action vector)
+    model.step(states, av, rewards, next_states, dones) 
 
     # roll over new state
     states = next_states
