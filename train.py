@@ -32,19 +32,27 @@ def build_model(actor_lr              : float,
                 critic_nn_l2          : int
                ):
 
+    # TODO: this info should be gotten from the AgentTypes objects
+
     # define NNs specifically for the soccer game
     goalie_states = 336
     goalie_actions = 5
+    num_goalie_agents = 2
+
     striker_states = 336
     striker_actions = 7
-    num_agents_in_game = 4 #assumes exactly one discrete action value per agent
+    num_striker_agents = 2
+
+    total_states = num_goalie_agents*goalie_states + num_striker_agents*striker_states
+    total_actions = num_goalie_agents*goalie_actions + num_striker_agents*striker_actions
     agent_models = AgentModels()
+
     agent_models.add_actor_critic("GoalieBrain", GoalieActor(goalie_states, goalie_actions, fc1_units=actor_nn_l1, fc2_units=actor_nn_l2), 
-                                    GoalieCritic(2*(goalie_states + striker_states), num_agents_in_game, 
-                                    fcs1_units=critic_nn_l1, fc2_units=critic_nn_l2), actor_lr, critic_lr)
+                                    GoalieCritic(total_states, total_actions, fcs1_units=critic_nn_l1, fc2_units=critic_nn_l2), 
+                                    actor_lr, critic_lr)
+
     agent_models.add_actor_critic("StrikerBrain", StrikerActor(striker_states, striker_actions, fc1_units=actor_nn_l1, fc2_units=actor_nn_l2),
-                                    StrikerCritic(2*(goalie_states + striker_states), num_agents_in_game,
-                                    fcs1_units=critic_nn_l1, fc2_units=critic_nn_l2), 
+                                    StrikerCritic(total_states, total_actions, fcs1_units=critic_nn_l1, fc2_units=critic_nn_l2),
                                     actor_lr, critic_lr)
     
     return agent_models
@@ -466,19 +474,19 @@ def debug_actions(types, actions, states, flag):
             
             # if it sees the ball to the left
             if is_ball[4]  or  is_ball[11]  or  is_ball[3]  or  is_ball[10]:
-                print("{}\t{}: Ball left\tAction {}{}".format(t, agent, actions[t][agent], flag))
+                print("{}\t{}: Ball left\tAction {}{}".format(t, agent, np.argmax(actions[t][agent]), flag))
             
             # if it sees the ball to the right
             elif is_ball[0]  or  is_ball[7]  or  is_ball[8]  or  is_ball[1]:
-                print("{}\t{}: Ball right\tAction {}{}".format(t, agent, actions[t][agent], flag))
+                print("{}\t{}: Ball right\tAction {}{}".format(t, agent, np.argmax(actions[t][agent]), flag))
             
             # if it sees the ball in front
             elif is_ball[12]  or  is_ball[13]  or  is_ball[2]  or  is_ball[5]  or is_ball[6]  or  is_ball[9]:
-                print("{}\t{}: Ball fwd\tAction {}{}".format(t, agent, actions[t][agent], flag))
+                print("{}\t{}: Ball fwd\tAction {}{}".format(t, agent, np.argmax(actions[t][agent]), flag))
 
             # else we don't know where the ball is
             else:
-                print("{}\t{}: Ball unknown\tAction {}{}".format(t, agent, actions[t][agent], flag))
+                print("{}\t{}: Ball unknown\tAction {}{}".format(t, agent, np.argmax(actions[t][agent]), flag))
             
     print(" ")
 
@@ -508,7 +516,7 @@ def learning_time_step(model         : AgentMgr,         # manager for all agetn
     if use_coaching:
         actions = modify_actions(prng, agent_types, actions, states)
         coaching_flag = "*"
-    debug_actions(agent_types, actions, states, coaching_flag)
+    debug_actions(agent_types, actions, states, coaching_flag) #takes in actions as integer values (one per agent)
 
     # get the new state & reward based on this action
     ea = copy.deepcopy(actions) # disposable copy because env.step() changes the elements to lists!

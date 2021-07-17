@@ -47,19 +47,19 @@ def debug_actions(types, actions, states, flag):
                 
                 # if it sees the ball to the left
                 if is_ball[4]  or  is_ball[11]  or  is_ball[3]  or  is_ball[10]:
-                    print("{}\t{}: Ball left\tAction {}{}".format(t, agent, actions[t][agent], flag))
+                    print("{}\t{}: Ball left\tAction {}{}".format(t, np.argmax(agent, actions[t][agent]), flag))
                 
                 # if it sees the ball to the right
                 elif is_ball[0]  or  is_ball[7]  or  is_ball[8]  or  is_ball[1]:
-                    print("{}\t{}: Ball right\tAction {}{}".format(t, agent, actions[t][agent], flag))
+                    print("{}\t{}: Ball right\tAction {}{}".format(t, agent, np.argmax(actions[t][agent]), flag))
                 
                 # if it sees the ball in front
                 elif is_ball[12]  or  is_ball[13]  or  is_ball[2]  or  is_ball[5]  or is_ball[6]  or  is_ball[9]:
-                    print("{}\t{}: Ball fwd\tAction {}{}".format(t, agent, actions[t][agent], flag))
+                    print("{}\t{}: Ball fwd\tAction {}{}".format(t, agent, np.argmax(actions[t][agent]), flag))
 
                 # else we don't know where the ball is
                 else:
-                    print("{}\t{}: Ball unknown\tAction {}{}".format(t, agent, actions[t][agent], flag))
+                    print("{}\t{}: Ball unknown\tAction {}{}".format(t, agent, np.argmax(actions[t][agent]), flag))
                 
 
 
@@ -169,9 +169,10 @@ class AgentMgr:
 
     #------------------------------------------------------------------------------
 
-    """Computes the next actions for all agents, given the current state info.
+    """Computes the next actions for all agents, given the current state info, and applies noise
+        if appropriate.
 
-        Return is a dict of actions, one entry for each agent type.  Each ndarray contains one entry for each 
+        Return is a dict of actions, one entry for each agent type.  Each ndarray contains one int for each 
         agent of that type, with the shape [num_agents, 1].
     """
 
@@ -182,12 +183,34 @@ class AgentMgr:
             add_noise       : bool = False  # are we to add random noise to the action output?
            ):
 
+        raw = self.get_raw_action_vector(states, is_inference, add_noise)
+        actions = self.find_best_action(raw)
+
+        return actions
+
+    #------------------------------------------------------------------------------
+
+    """Computes the next actions for all agents, given the current state info, and applies noise
+        if appropriate.
+
+        Return is a dict of ndarrays of actions, one entry for each agent type.  Each ndarray 
+        contains a full row vector of all possible actions for each agent of that type.  
+        Shape is [num_agents, num_actions].
+    """
+
+    def get_raw_action_vector(self, 
+                              states          : {},           # dict of current states; each entry represents an agent type,
+                                                              #   which is ndarray[num_agents, x]
+                              is_inference    : bool = False, # are we performing an inference using the current policy?
+                              add_noise       : bool = False  # are we to add random noise to the action output?
+                             ):
+
         act = {}
 
         if self.learning_underway  or  is_inference:
             for t in self.agent_types:
                 at = self.agent_types[t]
-                actions = np.empty((at.num_agents, 1), dtype=int) #one element for each agent of this type
+                actions = np.empty((at.num_agents, at.num_actions), dtype=float) #one row for each agent of this type
                 at.actor_policy.eval()
 
                 for i in range(at.num_agents):
@@ -202,11 +225,11 @@ class AgentMgr:
                             # time step so as to exhibit smooth motion, not herky-jerky.  Therefore, if a random draw in
                             # [0, 1) < "most of the time" threshold, just copy the previous action
                             if self.prng.random() < MOST_OF_TIME:
-                                actions[i] = self.prev_act[t][i]
+                                actions[i, :] = self.prev_act[t][i, :]
                             
                             # otherwise, let's pick a truly random action to have fun with
                             else:
-                                actions[i] = self.prng.integers(0, at.max_action_val)
+                                actions[i, :] = self.prng.random(at.num_actions)
 
                             noise_added = True
 
@@ -214,8 +237,7 @@ class AgentMgr:
                     if not noise_added:
                         s = torch.from_numpy(states[t][i]).float().to(DEVICE)
                         with torch.no_grad():
-                            raw = at.actor_policy(s).cpu().data.numpy()
-                            actions[i] = np.argmax(raw) #raw is a 1D vector representing all possible actions of 1 agent
+                            actions[i] = at.actor_policy(s) #returns a tensor ON DEVICE representing all possible actions for this agent
 
                 at.actor_policy.train()
 
@@ -235,10 +257,27 @@ class AgentMgr:
         else: # not learning or inference, so must be priming the replay buffer
             for t in self.agent_types:
                 at = self.agent_types[t]
-                actions = self.prng.integers(0, at.max_action_val, at.num_agents)
-                act[t] = np.expand_dims(np.array(actions, dtype=float), 1) #make it a 2D array
+                actions = np.empty((at.num_agents, at.num_actions), dtype=float) #one row for each agent of this type
+                for i in range(at.num_agents):
+                    actions[i, :] = self.prng.random(at.num_actions)
+                act[t] = actions
 
         return act
+
+    #------------------------------------------------------------------------------
+
+    """Given a vector of possible action choices, it returns the best action (the
+        index of the element with the largest score).
+
+        Return:  integer index of the best action (on cpu)
+    """
+
+    def find_best_action(self,
+                         action_vector  : torch.Tensor  # vector of raw values for each possible action ON DEVICE
+                        ):
+        
+        vec = action_vector.cpu().data.numpy()
+        best = np.argmax(vec)
 
     #------------------------------------------------------------------------------
 

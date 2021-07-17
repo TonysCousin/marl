@@ -35,7 +35,7 @@ class GoalieActor(nn.Module):
         Params
         ======
             state_size (int): Dimension of each state
-            action_size (int): Dimension of each action (number of enumerated actions)
+            action_size (int): Dimension of each action (all possible action values)
             seed (int): Random seed
             fc1_units (int): Number of nodes in first hidden layer
             fc2_units (int): Number of nodes in second hidden layer
@@ -73,7 +73,7 @@ class GoalieCritic(nn.Module):
         """Initialize parameters and build model.
            Params:
                state_size (int):  number of values for all agents' state vectors
-               action_size (int): number of values for all agents' action vectors (one enumerated value per agent)
+               action_size (int): number of values for all agents' action vectors (all possible actions per agent)
                seed (int):        random seed
                fcs1_units (int):  number of nodes in the first hidden layer
                fc2_units (int):   number of nodes in the second hidden layer
@@ -118,7 +118,7 @@ class StrikerActor(nn.Module):
         Params
         ======
             state_size (int): Dimension of each state
-            action_size (int): Dimension of each action (number of enumerated actions)
+            action_size (int): Dimension of each action (all possible action values)
             seed (int): Random seed
             fc1_units (int): Number of nodes in first hidden layer
             fc2_units (int): Number of nodes in second hidden layer
@@ -156,7 +156,7 @@ class StrikerCritic(nn.Module):
         """Initialize parameters and build model.
            Params:
                state_size (int):  number of values for all agents' state vectors
-               action_size (int): number of values for all agents' action vectors (one enumerated value per agent)
+               action_size (int): number of values for all agents' action vectors (all possible actions per agent)
                seed (int):        random seed
                fcs1_units (int):  number of nodes in the first hidden layer
                fc2_units (int):   number of nodes in the second hidden layer

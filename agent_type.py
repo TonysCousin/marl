@@ -25,7 +25,7 @@ class AgentType:
                  name                   : str,                                  # the name of the agent type (equivalent to ML-Agents brain name)
                  brain                  : unityagents.brain.BrainParameters,    # the ML-Agents brain object that represents this type of agent
                  state_size             : int,                                  # number of elements in the state vector
-                 max_action_val         : int,                                  # max value of the action (allowable range is [0, max_action_val))
+                 action_size            : int,                                  # number of possible actions
                  num_agents             : int,                                  # number of agents of this type in the scenario
                  actor_nn               : nn.Module,                            # neural network that maps states -> actions for all agents of this type
                  critic_nn              : nn.Module,                            # neural network used to predict Q value for the actor NN
@@ -39,7 +39,7 @@ class AgentType:
         self.name = name
         self.type_obj = brain
         self.state_size = state_size
-        self.max_action_val = max_action_val
+        self.action_size = action_size
         self.num_agents = num_agents
 
         # create the NNs and move them to the compute device - this is set up to support the MADDPG learning algorithm

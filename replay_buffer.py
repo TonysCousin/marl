@@ -32,19 +32,19 @@ def debug_actions(types, actions, states, flag):
                 
                 # if it sees the ball to the left
                 if is_ball[4]  or  is_ball[11]  or  is_ball[3]  or  is_ball[10]:
-                    print("{}\t{}: Ball left\tAction {}{}".format(t, agent, actions[t][agent], flag))
+                    print("{}\t{}: Ball left\tAction {}{}".format(t, agent, np.argmax(actions[t][agent]), flag))
                 
                 # if it sees the ball to the right
                 elif is_ball[0]  or  is_ball[7]  or  is_ball[8]  or  is_ball[1]:
-                    print("{}\t{}: Ball right\tAction {}{}".format(t, agent, actions[t][agent], flag))
+                    print("{}\t{}: Ball right\tAction {}{}".format(t, agent, np.argmax(actions[t][agent]), flag))
                 
                 # if it sees the ball in front
                 elif is_ball[12]  or  is_ball[13]  or  is_ball[2]  or  is_ball[5]  or is_ball[6]  or  is_ball[9]:
-                    print("{}\t{}: Ball fwd\tAction {}{}".format(t, agent, actions[t][agent], flag))
+                    print("{}\t{}: Ball fwd\tAction {}{}".format(t, agent, np.argmax(actions[t][agent]), flag))
 
                 # else we don't know where the ball is
                 else:
-                    print("{}\t{}: Ball unknown\tAction {}{}".format(t, agent, actions[t][agent], flag))
+                    print("{}\t{}: Ball unknown\tAction {}{}".format(t, agent, np.argmax(actions[t][agent]), flag))
                 
 def debug_actions_tensor(types, actions, states, flag):
         for t in types:
@@ -60,19 +60,19 @@ def debug_actions_tensor(types, actions, states, flag):
                     
                     # if it sees the ball to the left
                     if is_ball[4]  or  is_ball[11]  or  is_ball[3]  or  is_ball[10]:
-                        print("{}\t{}: Ball left\tAction {}{}".format(t, agent, actions[t][sample, agent], flag))
+                        print("{}\t{}: Ball left\tAction {}{}".format(t, agent, np.argmax(actions[t][sample, agent].numpy()), flag))
                     
                     # if it sees the ball to the right
                     elif is_ball[0]  or  is_ball[7]  or  is_ball[8]  or  is_ball[1]:
-                        print("{}\t{}: Ball right\tAction {}{}".format(t, agent, actions[t][sample, agent], flag))
+                        print("{}\t{}: Ball right\tAction {}{}".format(t, agent, np.argmax(actions[t][sample, agent].numpy()), flag))
                     
                     # if it sees the ball in front
                     elif is_ball[12]  or  is_ball[13]  or  is_ball[2]  or  is_ball[5]  or is_ball[6]  or  is_ball[9]:
-                        print("{}\t{}: Ball fwd\tAction {}{}".format(t, agent, actions[t][sample, agent], flag))
+                        print("{}\t{}: Ball fwd\tAction {}{}".format(t, agent, np.argmax(actions[t][sample, agent].numpy()), flag))
 
                     # else we don't know where the ball is
                     else:
-                        print("{}\t{}: Ball unknown\tAction {}{}".format(t, agent, actions[t][sample, agent], flag))
+                        print("{}\t{}: Ball unknown\tAction {}{}".format(t, agent, np.argmax(actions[t][sample, agent].numpy()), flag))
                 
 
 
@@ -243,11 +243,6 @@ class ReplayBuffer:
                     tr = torch.zeros(self.batch_size, num_agents, 1, dtype=torch.float)
                     tn = torch.zeros(self.batch_size, num_agents, e0[3][agent_type].shape[1], dtype=torch.float)
                     td = torch.zeros(self.batch_size, num_agents, 1, dtype=torch.float)
-                    #print("                     ts = ", ts.shape)
-                    #print("                     ta = ", ta.shape)
-                    #print("                     tr = ", tr.shape)
-                    #print("                     tn = ", tn.shape)
-                    #print("                     td = ", td.shape)
 
                     # loop through all the experiences, assigning each to a layer in the output tensor
                     for i, e in enumerate(experiences):
