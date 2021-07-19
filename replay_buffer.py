@@ -121,6 +121,12 @@ class ReplayBuffer:
     #------------------------------------------------------------------------------
 
     """Add a new experience to memory."""
+    """Add a new experience to the buffer.
+		We want to preserve existing 'good' experiences to a large extent.  When the
+		buffer gets full, it will push priming experiences off, but should retain any
+		other good experiences unless more than 50% of the buffer is already filled
+		with good ones.
+	"""
 
     def add(self,
              states         : {},           # dict of current states; each entry represents an agent type,
