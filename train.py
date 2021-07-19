@@ -526,7 +526,12 @@ def learning_time_step(model         : AgentMgr,         # manager for all agetn
         if was_coached:
             coaching_flag = "*"
     actions = model.find_best_action(av)
-    debug_actions(agent_types, actions, states, coaching_flag) #takes in actions as integer values (one per agent)
+    #debug_actions(agent_types, actions, states, coaching_flag) #takes in actions as integer values (one per agent)
+
+
+
+
+
 
     # get the new state & reward based on this action
     ea = copy.deepcopy(actions) # disposable copy because env.step() changes the elements to lists!

@@ -135,8 +135,8 @@ class ReplayBuffer:
 
 
 
-        print("replay_buffer.add():")
-        debug_actions(self.agent_types, actions, states, " ")
+        #print("replay_buffer.add():")
+        #debug_actions(self.agent_types, actions, states, " ")
 
 
 
@@ -269,8 +269,8 @@ class ReplayBuffer:
 
 
                 #TODO debug only
-                print("replay_buffer.sample():")
-                debug_actions_tensor(self.agent_types, actions, states, " ")
+                #print("replay_buffer.sample():")
+                #debug_actions_tensor(self.agent_types, actions, states, " ")
 
 
 

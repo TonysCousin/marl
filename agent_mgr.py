@@ -309,8 +309,8 @@ class AgentMgr:
 
         
 
-        print("step():")
-        debug_actions(self.agent_types, actions, states, " ")
+        #print("step():")
+        #debug_actions(self.agent_types, actions, states, " ")
 
         
         # set up probability of keeping bad experiences based upon whether the buffer is
