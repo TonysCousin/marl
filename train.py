@@ -16,7 +16,7 @@ from agent_mgr      import AgentMgr
 
 AVG_SCORE_EXTENT = 100 # number of episodes over which running average scores are computed
 CHECKPOINT_PATH = "checkpoint/" # can be empty string, but if a dir is named, needs trailing '/'
-ABORT_EPISODE = 400 # num episodes after which training will abort if insignificant learning is detected
+ABORT_EPISODE = 300 # num episodes after which training will abort if insignificant learning is detected
 PRIME_FEEDBACK_INTERVAL = 2000 # num time steps between visual feedback of priming progress
 
 
@@ -70,6 +70,7 @@ def build_and_train_model(env                   : UnityEnvironment,
                           use_coaching          : bool,
                           batch                 : int,
                           prime                 : int,
+                          learn_every           : int,
                           seed                  : int,
                           goal                  : float,
                           start_episode         : int,
@@ -87,7 +88,8 @@ def build_and_train_model(env                   : UnityEnvironment,
                           actor_nn_l1           : int,
                           actor_nn_l2           : int,
                           critic_nn_l1          : int,
-                          critic_nn_l2          : int
+                          critic_nn_l2          : int,
+                          update_factor         : float
                          ):
 
     # build the NN models for the agents, using randomly initialized params
@@ -97,8 +99,8 @@ def build_and_train_model(env                   : UnityEnvironment,
     prng = np.random.default_rng(seed)
 
     # create the agent manager
-    mgr = AgentMgr(env, agent_models, batch_size=batch, buffer_prime=prime, bad_step_prob=bad_step_prob, random_seed=seed,
-                    use_noise=use_noise, noise_init=noise_init, noise_decay=noise_decay, prng=prng)
+    mgr = AgentMgr(env, agent_models, batch_size=batch, buffer_prime=prime, learn_every=learn_every, bad_step_prob=bad_step_prob, random_seed=seed,
+                    use_noise=use_noise, noise_init=noise_init, noise_decay=noise_decay, update_factor=update_factor, prng=prng)
 
     # if the starting episode is non-zero, then use the agent manager to restore the NN models from an appropriate checkpoint
     if start_episode > 0:
@@ -259,7 +261,7 @@ def train(mgr               : AgentMgr,         # manages all agents and their l
         # if this solution is clearly going nowhere, then abort early
         if ep > starting_episode + ABORT_EPISODE:
             hit_rate = float(mem_stats[1]) / ep
-            if hit_rate < 0.01  or  (rem_time > 2.0  and  hit_rate < 0.06):
+            if hit_rate < 0.025  or  (rem_time > 2.0  and  ep > starting_episode + 2*ABORT_EPISODE  and   hit_rate < 0.06):
                 print("\n* Aborting due to inadequate progress.")
                 print("Final noise level = {:6.4f}".format(mgr.get_noise_level()))
                 break

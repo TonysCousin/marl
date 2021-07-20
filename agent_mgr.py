@@ -25,7 +25,7 @@ DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 BAD_STEP_KEEP_PROB_INIT = 0.1
 
 # fraction of time that is considered "most of it" for smoothing random actions
-MOST_OF_TIME = 0.75
+MOST_OF_TIME = 0.75 #0.75 results in WAAAY more than 75% of time with see 468
 
 #TODO: this threshold should be a param, since it may be game dependent
 # experience reward value above which is considered a desirable experience

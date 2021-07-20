@@ -55,11 +55,11 @@ from random_sampler import RandomSampler
 
 #----------------------------------------------------------------------
 
-NAME                = "CONT02" #next is 
+NAME                = "CONT04" #next is 3
 NUM_RUNS            = 4
 CHKPT_EVERY         = 100
 PRIME               = 2000  #num random experiences added to the replay buffer before training begins
-SEED                = 468   #0, 111, 468, 5555, 23100, 44939
+SEED                = 5555   #0, 111, 468, 5555, 23100, 44939
 GOAL                = 0.8   #avg reward needed to be considered a satisfactory solution
 EPISODES            = 1001  #max num episodes per run
 INIT_TIME_STEPS     = 100
@@ -70,16 +70,18 @@ USE_COACHING        = False
 
 # Define the ranges of hyperparams that will be explored
 vars = [
-        ["discrete",            32, 64, 128],               # BATCH
-        ["discrete",            0.9999        ],          # BAD_STEP_PROB
+        ["discrete",            16, 64, 256],               # BATCH
+        ["discrete",            0.1, 0.9999        ],          # BAD_STEP_PROB
         ["continuous-float",    0.8,         0.95],          # NOISE_INIT
-        ["continuous-float",    -5.1,       -4.0],          # log10 of 1-NOISE_DECAY
-        ["continuous-float",    -5.0,       -2.0],          # log10 of actor LR (all agent types)
+        ["continuous-float",    -5.1,       -4.5],          # log10 of 1-NOISE_DECAY
+        ["continuous-float",    -5.0,       -2.7],          # log10 of actor LR (all agent types)
         ["continuous-float",    0.05,       0.5],          # multiplier on actor LR to get critic LR
         ["discrete",            1024],            # ACTOR_NN_L1 num nodes
         ["discrete",            4],                      # ACTOR_NN_L2 divisor (from l1)
         ["discrete",            2048, 3072],    # CRITIC_NN_L1 num nodes
-        ["discrete",            4]                       # CRITIC_NN_L2 divisor (from l1)
+        ["discrete",            4],                       # CRITIC_NN_L2 divisor (from l1)
+        ["discrete",            1, 2, 4],                    # LEARN_EVERY
+        ["continuous-float",   -4.0, -2.0]                 # log10 of TAU
        ]
 rs = RandomSampler(vars)
 
@@ -102,6 +104,8 @@ for run in range(NUM_RUNS):
     ACTOR_NN_L2     = ACTOR_NN_L1 // v[7]
     CRITIC_NN_L1    = v[8]
     CRITIC_NN_L2    = CRITIC_NN_L1 // v[9]
+    LEARN_EVERY     = v[10]
+    TAU             = math.pow(10.0, v[11])
 
     print("\n///// Beginning run {} with:".format(run_name))
     print("      Batch size     = {:4d}".format(BATCH))
@@ -110,15 +114,17 @@ for run in range(NUM_RUNS):
     print("      Noise decay    = {:.6f}".format(NOISE_DECAY))
     print("      Actor LR       = {:.6f}".format(ACTOR_LR))
     print("      Critic LR      = {:.6f}".format(CRITIC_LR))
+    print("      Tgt update rate= {:.5f}".format(TAU))
     print("      Actor l1 size  = {:d}".format(ACTOR_NN_L1))
     print("      Actor l2 size  = {:d}".format(ACTOR_NN_L2))
     print("      Critic l1 size = {:d}".format(CRITIC_NN_L1))
     print("      Critic l2 size = {:d}".format(CRITIC_NN_L2))
+    print("      Learn every    = {:d}".format(LEARN_EVERY))
 
     # Build the model with the selected hyperparams and train it
-    build_and_train_model(env, run_name, USE_COACHING, BATCH, PRIME, SEED, GOAL, 0, EPISODES, CHKPT_EVERY, INIT_TIME_STEPS, 
+    build_and_train_model(env, run_name, USE_COACHING, BATCH, PRIME, LEARN_EVERY, SEED, GOAL, 0, EPISODES, CHKPT_EVERY, INIT_TIME_STEPS, 
                             INCR_TSTEP_EVERY, FINAL_TIME_STEPS, BAD_STEP_PROB, USE_NOISE, NOISE_INIT, NOISE_DECAY,
-                            ACTOR_LR, CRITIC_LR, ACTOR_NN_L1, ACTOR_NN_L2, CRITIC_NN_L1, CRITIC_NN_L2)
+                            ACTOR_LR, CRITIC_LR, ACTOR_NN_L1, ACTOR_NN_L2, CRITIC_NN_L1, CRITIC_NN_L2, TAU)
 
 # Close the Unity environment after all training runs are complete
 env.close()
