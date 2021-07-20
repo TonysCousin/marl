@@ -449,11 +449,12 @@ class AgentMgr:
                 q_expected = at.critic_policy(states_all, actions_all).squeeze()
 
                 # use the current policy to compute the critic loss for this agent
-                critic_loss = F.mse_loss(q_expected, q_targets.detach())
+                critic_loss = F.mse_loss(q_expected, q_targets) #q_targets was previously detached
 
                 # minimize the loss
                 at.critic_opt.zero_grad()
-                critic_loss.backward()
+                retain = agent < at.num_agents - 1
+                critic_loss.backward(retain_graph=retain)
                 torch.nn.utils.clip_grad_norm_(at.critic_policy.parameters(), 1.0)
                 at.critic_opt.step()
 
