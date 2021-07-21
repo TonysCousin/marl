@@ -10,6 +10,7 @@
 
 import numpy as np
 import torch
+import sys
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -22,10 +23,10 @@ from utils          import get_max
 DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 # probability of keeping experiences with bad rewards during replay buffer priming
-BAD_STEP_KEEP_PROB_INIT = 0.1
+BAD_STEP_KEEP_PROB_INIT = 0.2
 
 # fraction of time that is considered "most of it" for smoothing random actions
-MOST_OF_TIME = 0.75 #0.75 results in WAAAY more than 75% of time with see 468
+MOST_OF_TIME = 0.1
 
 #TODO: this threshold should be a param, since it may be game dependent
 # experience reward value above which is considered a desirable experience
@@ -204,6 +205,9 @@ class AgentMgr:
                               is_inference    : bool = False, # are we performing an inference using the current policy?
                               add_noise       : bool = False  # are we to add random noise to the action output?
                              ):
+        
+        print("R0", end="")
+        sys.stdout.flush()
 
         act = {}
 
@@ -262,6 +266,8 @@ class AgentMgr:
                     actions[i, :] = self.prng.random(at.action_size)
                 act[t] = actions
 
+        print("f ", end="")
+        sys.stdout.flush()
         return act
 
     #------------------------------------------------------------------------------
@@ -307,7 +313,8 @@ class AgentMgr:
              dones          : {}            # dict of done flags, each entry an agent type, which is a list of bools
             ):
 
-        
+        print("S ", end="")
+        sys.stdout.flush()
 
         #print("step():")
         #debug_actions(self.agent_types, actions, states, " ")
@@ -375,6 +382,9 @@ class AgentMgr:
                                     #       x is number of action values (for one agent of that type) for a
                                     #       x is 1 for r and done
              ):
+
+        print("L0", end="")
+        sys.stdout.flush()
 
         #.........Prepare the input data
 
@@ -490,6 +500,9 @@ class AgentMgr:
                 # perform a soft update on the critic & actor target NNs for each agent type
                 self.soft_update(at.critic_policy, at.critic_target)
                 self.soft_update(at.actor_policy, at.actor_target)
+
+        print("f ", end="")
+        sys.stdout.flush()
 
     #------------------------------------------------------------------------------
 

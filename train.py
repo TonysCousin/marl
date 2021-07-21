@@ -189,8 +189,8 @@ def train(mgr               : AgentMgr,         # manages all agents and their l
 
         # loop over time steps
         for i in range(max_time_steps):
-
-            #print("\n\nTime step ", i, ". states =\n", states)
+            print("\n  Step {:3d}/{:3d}: ".format(i, max_time_steps), end="")
+            sys.stdout.flush()
 
             # advance the MADDPG model and its environment by one time step
             states, rewards, dones = learning_time_step(mgr, env, use_coaching, prng, agent_types, states)
@@ -204,6 +204,8 @@ def train(mgr               : AgentMgr,         # manages all agents and their l
                 if i > max_steps_experienced:
                     max_steps_experienced = i
                 break
+        
+        print("\n")
 
         # determine episode duration and estimate remaining time
         current_time = time.perf_counter()

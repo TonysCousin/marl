@@ -55,8 +55,8 @@ from random_sampler import RandomSampler
 
 #----------------------------------------------------------------------
 
-NAME                = "CONT04" #next is 3
-NUM_RUNS            = 4
+NAME                = "CONT05" #next is 
+NUM_RUNS            = 8
 CHKPT_EVERY         = 100
 PRIME               = 2000  #num random experiences added to the replay buffer before training begins
 SEED                = 5555   #0, 111, 468, 5555, 23100, 44939
