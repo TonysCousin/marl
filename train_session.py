@@ -55,7 +55,7 @@ from random_sampler import RandomSampler
 
 #----------------------------------------------------------------------
 
-NAME                = "CONT05" #next is 
+NAME                = "CONT06" #next is 
 NUM_RUNS            = 8
 CHKPT_EVERY         = 100
 PRIME               = 2000  #num random experiences added to the replay buffer before training begins
@@ -71,7 +71,7 @@ USE_COACHING        = False
 # Define the ranges of hyperparams that will be explored
 vars = [
         ["discrete",            16, 64, 256],               # BATCH
-        ["discrete",            0.1, 0.9999        ],          # BAD_STEP_PROB
+        ["discrete",            0.1        ],          # BAD_STEP_PROB
         ["continuous-float",    0.8,         0.95],          # NOISE_INIT
         ["continuous-float",    -5.1,       -4.5],          # log10 of 1-NOISE_DECAY
         ["continuous-float",    -5.0,       -2.7],          # log10 of actor LR (all agent types)

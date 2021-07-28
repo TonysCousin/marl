@@ -472,6 +472,8 @@ def modify_rewards(types        : {},   # dict of AgentType describing all agent
 
 #------------------------------------------------------------------------------
 
+#TODO: for debugging only!
+
 def debug_actions(types, actions, states, flag):
         
     print("\n-----  entering learning_time_step:")
@@ -500,8 +502,6 @@ def debug_actions(types, actions, states, flag):
             else:
                 print("{}\t{}: Ball unknown\tAction {}{}".format(t, agent, actions[t][agent], flag))
             
-    print(" ")
-
 
 #------------------------------------------------------------------------------
 
