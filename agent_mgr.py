@@ -141,6 +141,14 @@ class AgentMgr:
         # define simple experience replay buffer common to all agents
         self.erb = ReplayBuffer(buffer_size, batch_size, buffer_prime, REWARD_THRESHOLD, self.prng)
 
+        # set up accumulators for the step() method to record all the experiences for a single episode;
+        # each list will hold dicts
+        self.ep_states = []
+        self.ep_actions = []
+        self.ep_rewards = []
+        self.ep_next_st = []
+        self.ep_dones = []
+
 
 
         self.erb.store_types(self.agent_types) #TODO: debug only!
@@ -291,8 +299,7 @@ class AgentMgr:
 
     #------------------------------------------------------------------------------
 
-    """Stores a new experience from the environment in replay buffer, if appropriate,
-        and initiates learning, if appropriate.
+    """Accumulates data for each experience in an episode. 
 
         Return:  none
     """
@@ -307,48 +314,12 @@ class AgentMgr:
              dones          : {}            # dict of done flags, each entry an agent type, which is a list of bools
             ):
 
-        
-
-        #print("step():")
-        #debug_actions(self.agent_types, actions, states, " ")
-
-        
-        # set up probability of keeping bad experiences based upon whether the buffer is
-        # full enough to start learning
-        if len(self.erb) >= max(self.batch_size, self.buffer_prime_size):
-            random_threshold = self.bad_step_keep_prob
-            self.learning_underway = True
-        else:
-            random_threshold = BAD_STEP_KEEP_PROB_INIT
-
-        # if this step got some reward then keep it;
-        # if it did not score any points, then use random draw to decide if it's a keeper
-        if get_max(rewards) > REWARD_THRESHOLD  or  self.prng.random() < random_threshold:
-            self.erb.add(states, actions, rewards, next_states, dones)
-
-        # initiate learning on each agent, but only every N time steps
-        self.learn_control += 1
-        if self.learning_underway:
-
-            # perform the learning if it is time
-            if self.learn_control >= self.learn_every:
-                self.learn_control = 0
-                experiences = self.erb.sample()
-                self.learn(experiences)
-
-            """For possible future implementation:
-            # update learning rate annealing; this is counting episodes, not time steps
-            if is_episode_done(dones):
-                for i in range(self.num_agents):
-                    self.actor_scheduler[i].step()
-                    self.critic_scheduler[i].step()
-                    clr = self.critic_scheduler[i].get_lr()[0]
-                    if clr < self.prev_clr: # assumes both critics have same LR schedule
-                        if clr < 1.0e-7:
-                            print("\n*** CAUTION: low learning rates: {:.7f}, {:.7f}" \
-                                  .format(self.actor_scheduler[0].get_lr()[0], clr))
-                        self.prev_clr = clr
-            """
+        # accumulate the data from this time step into the episode lists
+        self.ep_states.append(states)
+        self.ep_actions.append(actions)
+        self.ep_rewards.append(rewards)
+        self.ep_next_st.append(next_states)
+        self.ep_dones.append(dones)
 
     #------------------------------------------------------------------------------
 
@@ -364,22 +335,54 @@ class AgentMgr:
         trained for multiple iterations at each training step, in order to keep total learning iterations on the
         models more-or-less even across all NN models.
 
+        CAUTION: assumes it will only be called after step() has been called at least once for a new episode, so
+        that the episode accumulator lists are not empty (intention is to only call this method at the end of
+        an episode).
+
         Return:  none
     """
 
-    def learn(self,
-              experiences   : ()    # tuple of dicts (s, a, r, s', done), where each dict contains an entry for each
-                                    #   agent type. Each of these entries is a tensor of [b, a, x], where b is
-                                    #   batch size, a is number of agents of that type, and
-                                    #       x is number of states (for one agent of that type) for s and s'
-                                    #       x is number of action values (for one agent of that type) for a
-                                    #       x is 1 for r and done
-             ):
+    def learn(self):
 
-        #.........Prepare the input data
+        #.........Prepare the input data, which was accumulated by the step() method previously
+
+        
+        
+        
+        
+        
+        """this needs to be moved into learn() (in a loop). Afterwards, the accumulation lists need to be cleared.
+        self.erb.add(states, actions, rewards, next_states, dones)
+                experiences = 
+                self.learn(experiences)
+                """
+
+        # compute the discounted rewards for each time step to the end of the episode
+        discount = self.gamma ** np.arange(len(self.ep_rewards)) #multipliers to be applied to future time steps
+
+        for t in self.agent_types:
+            at = self.agent_types[t]
+            dr = []
+            for agent in range(at.num_agents): #JOHN: ep_rewards is a list of dicts of lists - need to unpack it
+                dr.append(something)
+        
+        
+        discounted_rewards = discount * self.ep_rewards
+
+        # clear the episode accumulators to prepare for the next episode
+        self.ep_states.clear()
+        self.ep_actions.clear()
+        self.ep_rewards.clear()
+        self.ep_next_st.clear()
+        self.ep_dones.clear()
+
+
+
+
+
 
         # extract the elements of the replayed batch of experiences
-        states, actions, rewards, next_states, dones = experiences
+        states, actions, rewards, next_states, dones = self.erb.sample()
 
         # create tensors to hold states, actions and next_states for all agents where all agents are
         # represented in a single row (each row is an experience in the training batch) so size is [b, x].
@@ -593,6 +596,8 @@ class AgentMgr:
     #------------------------------------------------------------------------------
 
     """Returns true if at least one flag in the input dict is true, false otherwise."""
+
+    #TODO: consider only looking at last item in each list, since that should be the only one that has a true value?
 
     def is_episode_done(self,
                         flags   : {}    # dict of lists of bool flags indicating completion

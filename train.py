@@ -153,21 +153,6 @@ def train(mgr               : AgentMgr,         # manages all agents and their l
     start_time = 0
     agent_types = mgr.get_agent_types()
 
-    # run the simulation for several time steps to prime the replay buffer
-    print("Priming the replay buffer", end="")
-    pc = 0
-    env_info = env.reset(train_mode=True)
-    states = all_agent_states(env_info, agent_types) #initial state vectors after env reset
-    while not mgr.is_learning_underway():
-        states, rewards, dones = learning_time_step(mgr, env, False, prng, agent_types, states) #no coaching here
-        if pc % PRIME_FEEDBACK_INTERVAL == 0:
-            print(".", end="")
-            sys.stdout.flush()
-        pc += 1
-        if any_dones(agent_types, dones): # if episode ends just keep going
-            env_info = env.reset(train_mode=True)
-            states = all_agent_states(env_info, agent_types)
-
     timestamp = time.strftime("%a %H:%M")
     print("!\n\n\n///// Training underway at {}".format(timestamp))
     sys.stdout.flush()
@@ -193,7 +178,7 @@ def train(mgr               : AgentMgr,         # manages all agents and their l
             #print("\n\nTime step ", i, ". states =\n", states)
 
             # advance the MADDPG model and its environment by one time step
-            states, rewards, dones = learning_time_step(mgr, env, use_coaching, prng, agent_types, states)
+            states, rewards, dones = time_step(mgr, env, use_coaching, prng, agent_types, states)
 
             # add this step's reward to the episode score
             score += max_rewards(agent_types, rewards)
@@ -204,6 +189,16 @@ def train(mgr               : AgentMgr,         # manages all agents and their l
                 if i > max_steps_experienced:
                     max_steps_experienced = i
                 break
+        
+        # invoke the learning algorithm on each desired agent
+        mgr.learn(
+
+
+
+
+
+
+            
 
         # determine episode duration and estimate remaining time
         current_time = time.perf_counter()
@@ -314,11 +309,11 @@ def any_dones(types : {},   # dict of AgentType describing all agent types
               dones : {}    # dict of lists of done flags for each agent of each type
              ):
 
-    result = False
     for t in types:
-        result |= any(dones[t])
+        if any(dones[t]):
+            return True
 
-    return result
+    return False
 
 #------------------------------------------------------------------------------
 
@@ -511,14 +506,14 @@ def debug_actions(types, actions, states, flag):
     Returns: tuple of (states, rewards, dones) where each is a dict of agent types
 """
 
-def learning_time_step(model         : AgentMgr,         # manager for all agetns and environment
-                       env           : UnityEnvironment, # the environment object in which all action occurs
-                       use_coaching  : bool,             # will we invoke coaching to modify actions & rewards?
-                       prng          : np.random.Generator,# random number generator
-                       agent_types   : {},               # dict of AgentType
-                       states        : {}                # dict of current states; each entry represents an agent type,
-                                                         #   which is ndarray[num_agents, x]
-                      ):
+def time_step(model         : AgentMgr,         # manager for all agetns and environment
+              env           : UnityEnvironment, # the environment object in which all action occurs
+              use_coaching  : bool,             # will we invoke coaching to modify actions & rewards?
+              prng          : np.random.Generator,# random number generator
+              agent_types   : {},               # dict of AgentType
+              states        : {}                # dict of current states; each entry represents an agent type,
+                                                #   which is ndarray[num_agents, x]
+             ):
 
     # Predict the best actions for the current state and store them in a single ndarray
     av = model.get_raw_action_vector(states) #returns dict of ndarray, with each entry having a row for each agent (scores for all possible actions)
@@ -529,11 +524,6 @@ def learning_time_step(model         : AgentMgr,         # manager for all agetn
             coaching_flag = "*"
     actions = model.find_best_action(av)
     #debug_actions(agent_types, actions, states, coaching_flag) #takes in actions as integer values (one per agent)
-
-
-
-
-
 
     # get the new state & reward based on this action
     ea = copy.deepcopy(actions) # disposable copy because env.step() changes the elements to lists!
