@@ -22,14 +22,15 @@ from utils          import get_max
 DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 # probability of keeping experiences with bad rewards during replay buffer priming
-BAD_STEP_KEEP_PROB_INIT = 0.1
+BAD_STEP_KEEP_PROB_INIT = 1.0
 
 # fraction of time that is considered "most of it" for smoothing random actions
 MOST_OF_TIME = 0.75 #0.75 results in WAAAY more than 75% of time with see 468
 
 #TODO: this threshold should be a param, since it may be game dependent
 # experience reward value above which is considered a desirable experience
-REWARD_THRESHOLD = 0.1 #only allows experiences with a goal scored
+#TODO: change this to -1 or so?
+REWARD_THRESHOLD = 0.1 #flags experiences with a goal scored
 
 
 
@@ -122,10 +123,11 @@ class AgentMgr:
                                                actor_lr, critic_lr, actor_weight_decay, critic_weight_decay)
         
         # initialize other internal stuff
-        self.learning_underway = False 
+        self.learning_underway = True #if priming replay buffer, use False here and have step() flip it when buffer is primed
         self.learn_control = 0          #num time steps between learning events
         self.learn_every = learn_every
         self.prev_act = {}              #holds actions from previous time step; each entry is an agent type tensor
+        self.first_time_step = True     #is this the first time step of an episode?
 
         # find the total numbers of states & actions across all agents
         self.num_states_all = 0
@@ -232,7 +234,7 @@ class AgentMgr:
                             # not quite random.  Most of the time we want it to continue doing what it did in the previous
                             # time step so as to exhibit smooth motion, not herky-jerky.  Therefore, if a random draw in
                             # [0, 1) < "most of the time" threshold, just copy the previous action
-                            if self.prng.random() < MOST_OF_TIME:
+                            if not self.first_time_step  and  self.prng.random() < MOST_OF_TIME:
                                 actions[i, :] = self.prev_act[t][i, :]
                             
                             # otherwise, let's pick a truly random action to have fun with
@@ -252,15 +254,15 @@ class AgentMgr:
                 act[t] = actions
                 self.prev_act[t] = actions
 
-                # reduce the noise probability
-                if add_noise  or  self.use_noise:
-                    self.noise_level *= self.noise_decay
-                    if self.noise_level <= 0.1  and  not self.noise_reported1:
-                        print("\n* Noise decayed to 0.1")
-                        self.noise_reported1 = True
-                    if self.noise_level <= 0.01  and  not self.noise_reported2:
-                        print("\n* Noise decayed to 0.01")
-                        self.noise_reported2 = True
+            # reduce the noise probability
+            if add_noise  or  self.use_noise:
+                self.noise_level *= self.noise_decay
+                if self.noise_level <= 0.1  and  not self.noise_reported1:
+                    print("\n* Noise decayed to 0.1")
+                    self.noise_reported1 = True
+                if self.noise_level <= 0.01  and  not self.noise_reported2:
+                    print("\n* Noise decayed to 0.01")
+                    self.noise_reported2 = True
 
         else: # not learning or inference, so must be priming the replay buffer
             for t in self.agent_types:
@@ -321,6 +323,8 @@ class AgentMgr:
         self.ep_next_st.append(next_states)
         self.ep_dones.append(dones)
 
+        self.first_time_step = False
+
     #------------------------------------------------------------------------------
 
     """Update policy and value parameters using the given batch of experience tuples.
@@ -344,30 +348,36 @@ class AgentMgr:
 
     def learn(self):
 
-        #.........Prepare the input data, which was accumulated by the step() method previously
-
-        
-        
-        
-        
-        
-        """this needs to be moved into learn() (in a loop). Afterwards, the accumulation lists need to be cleared.
-        self.erb.add(states, actions, rewards, next_states, dones)
-                experiences = 
-                self.learn(experiences)
-                """
+        #.........Calculate discounted rewards from the previous episode (accumulated by the step() method)
+        #         and store the new experiences in the replay buffer
 
         # compute the discounted rewards for each time step to the end of the episode
-        discount = self.gamma ** np.arange(len(self.ep_rewards)) #multipliers to be applied to future time steps
+        num_time_steps = len(self.ep_rewards)
+        discount = self.gamma ** np.arange(num_time_steps) #multipliers to be applied to future time steps
 
+        # for each agent pull out its raw rewards then apply the discount factors, sum the future rewards, then
+        # replace them in the original data structure; ep_rewards is a list of dicts of lists
         for t in self.agent_types:
             at = self.agent_types[t]
-            dr = []
-            for agent in range(at.num_agents): #JOHN: ep_rewards is a list of dicts of lists - need to unpack it
-                dr.append(something)
-        
-        
-        discounted_rewards = discount * self.ep_rewards
+            for agent in range(at.num_agents):
+                dr = []
+                for step in range(num_time_steps):
+                    dr.append(self.ep_rewards[step][t][agent]) #becomes a list of raw rewards for this agent
+                
+                dr = np.array(dr) * discount
+                future_reward = dr[::-1].cumsum(axis=0)[::-1]
+
+                for step in range(num_time_steps):
+                    self.ep_rewards[step][t][agent] = future_reward[step]
+
+        # each time step is an experience that needs to be added to the replay buffer
+        for step in range(num_time_steps):
+            s = self.ep_states[step]    #each of these items is a dict
+            a = self.ep_actions[step]
+            r = self.ep_rewards[step]
+            n = self.ep_next_st[step]
+            d = self.ep_dones[step]
+            self.erb.add(s, a, r, n, d)
 
         # clear the episode accumulators to prepare for the next episode
         self.ep_states.clear()
@@ -375,13 +385,15 @@ class AgentMgr:
         self.ep_rewards.clear()
         self.ep_next_st.clear()
         self.ep_dones.clear()
+        self.first_time_step = True
 
+        #.........Prepare the learning batch data
 
+        # make sure we have enough experiences in the buffer to do a learning batch
+        if len(self.erb) < self.batch_size:
+            return
 
-
-
-
-        # extract the elements of the replayed batch of experiences
+        # sample a batch of experiences from the replay buffer and extract the elements
         states, actions, rewards, next_states, dones = self.erb.sample()
 
         # create tensors to hold states, actions and next_states for all agents where all agents are
@@ -402,7 +414,6 @@ class AgentMgr:
                 states_all = torch.cat((states_all, s), dim=1)
                 actions_all = torch.cat((actions_all, a), dim=1)
                 next_states_all = torch.cat((next_states_all, n), dim=1)
-
 
         #.........Use the current actor NNs to get possible action values
 

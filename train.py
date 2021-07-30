@@ -182,6 +182,11 @@ def train(mgr               : AgentMgr,         # manages all agents and their l
 
             # add this step's reward to the episode score
             score += max_rewards(agent_types, rewards)
+        #HEY JOHN:  check value of rewards carefully - are these future reward values now?
+        #ALSO:  what does score mean here?  Do I want the max_rewards value?  What if only one team is being trained?
+
+
+
 
             # if the episode is complete, update the record time steps in an episode and stop the time step loop
             if any_dones(agent_types, dones):
@@ -191,14 +196,7 @@ def train(mgr               : AgentMgr,         # manages all agents and their l
                 break
         
         # invoke the learning algorithm on each desired agent
-        mgr.learn(
-
-
-
-
-
-
-            
+        mgr.learn()
 
         # determine episode duration and estimate remaining time
         current_time = time.perf_counter()
