@@ -9,7 +9,6 @@ import time
 from collections    import deque
 from unityagents    import UnityEnvironment
 
-from agent_type     import AgentType
 from agent_models   import AgentModels
 from model          import GoalieActor, GoalieCritic, StrikerActor, StrikerCritic
 from agent_mgr      import AgentMgr
@@ -67,6 +66,8 @@ def build_model(actor_lr              : float,
 
 def build_and_train_model(env                   : UnityEnvironment,
                           name                  : str,
+                          train_agents          : {},               # one entry for each agent type; value is a list of bool training flags
+                          use_policies          : {},               # one entry for each agent type; value is a list of bool policy flags
                           use_coaching          : bool,
                           batch                 : int,
                           prime                 : int,
@@ -99,14 +100,27 @@ def build_and_train_model(env                   : UnityEnvironment,
     prng = np.random.default_rng(seed)
 
     # create the agent manager
-    mgr = AgentMgr(env, agent_models, batch_size=batch, buffer_prime=prime, learn_every=learn_every, bad_step_prob=bad_step_prob, random_seed=seed,
+    mgr = AgentMgr(env, agent_models, batch_size=batch, buffer_prime=prime, learn_every=learn_every, bad_step_prob=bad_step_prob,
                     use_noise=use_noise, noise_init=noise_init, noise_decay=noise_decay, update_factor=update_factor, prng=prng)
 
     # if the starting episode is non-zero, then use the agent manager to restore the NN models from an appropriate checkpoint
     if start_episode > 0:
         mgr.restore_checkpoint(CHECKPOINT_PATH, name, start_episode)
 
-    #print("Haltus")
+    # modify any individual agents who may need to skip training or use of policy NNs
+    if len(train_agents) != len(use_policies):
+        print("\n\n///// ERROR: build_and_train_model - differing lengths of train_agents and use_policies.")
+        return
+    for t in train_agents: #assume train_agents and use_policies are the same length
+        training = train_agents[t]
+        policy = use_policies[t]
+        if len(training) != len(policy):
+            print("\n///// ERROR: build_and_train_model - inconsistent number of agents indicated for agent type ", t)
+            return
+        for a in range(len(training)): #assume same number of agents indicated in each list
+            # look for any flag that is false (default values are all true); if so then modify the agent object
+            if not training[a]  or  not policy[a]:
+                mgr.modify_behavior(t, a, training[a], policy[a])
 
     train(mgr, env, run_name=name, starting_episode=start_episode, max_episodes=episodes, chkpt_interval=chkpt_every, training_goal=goal,
           init_time_steps=init_time_steps, incr_time_steps_every=incr_time_steps_every, final_time_steps=final_time_steps, prng=prng,
@@ -242,13 +256,15 @@ def train(mgr               : AgentMgr,         # manages all agents and their l
             if ep % 100 < 5:
                 time.sleep(1) #allow time to view the Unity window
 
-        # if we have met the winning criterion, save a checkpoint and terminate
-        if ep - starting_episode >= AVG_SCORE_EXTENT  and  avg_score >= training_goal:
+        # if we have met the winning criterion and noise level is small (so the solution is not just random), 
+        # then save a checkpoint and terminate
+        if ep - starting_episode >= AVG_SCORE_EXTENT  and  avg_score >= training_goal \
+                and  mgr.get_noise_level() < 0.01:
             print("\nEnvironment solved in {:d} episodes!\tAverage Score: {:.2f}".format(ep, avg_score))
             mgr.save_checkpoint(CHECKPOINT_PATH, run_name, ep)
-            print("\nMost recent individual episode scores:")
-            for j, sc in enumerate(recent_scores):
-                print("{:2d}: {:.2f}".format(j, sc))
+            #print("\nMost recent individual episode scores:")
+            #for j, sc in enumerate(recent_scores):
+            #    print("{:2d}: {:.2f}".format(j, sc))
             break
 
         # if this solution is clearly going nowhere, then abort early

@@ -7,11 +7,11 @@ import copy
 
 class GaussNoise:
 
-    def __init__(self, size, seed, sigma=0.2):
+    def __init__(self, size, prng, sigma=0.2):
         """Initialize parameters and noise process."""
         self.size = size
         self.sigma = sigma
-        self.rng = default_rng(seed)
+        self.rng = prng
 
 
     def reset(self):

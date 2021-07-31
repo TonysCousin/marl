@@ -4,9 +4,11 @@
     to determine their next actions based on current state.
 """
 
+from numpy.core.numeric import ones
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from typing import List
 import unityagents
 
 class AgentType:
@@ -27,6 +29,9 @@ class AgentType:
                  state_size             : int,                                  # number of elements in the state vector
                  action_size            : int,                                  # number of possible actions
                  num_agents             : int,                                  # number of agents of this type in the scenario
+                 train_me               : List[bool],                           # a bool entry for each agent; is it to be trained?
+                 use_policy             : List[bool],                           # a bool entry for each agent; is it to use policy NN for actions?
+                                                                                #   False indicates it will always provide random actions
                  actor_nn               : nn.Module,                            # neural network that maps states -> actions for all agents of this type
                  critic_nn              : nn.Module,                            # neural network used to predict Q value for the actor NN
                  actor_lr               : float,                                # learning rate for the actor NN
@@ -41,6 +46,8 @@ class AgentType:
         self.state_size = state_size
         self.action_size = action_size
         self.num_agents = num_agents
+        self.train_me = train_me
+        self.use_policy = use_policy
 
         # create the NNs and move them to the compute device - this is set up to support the MADDPG learning algorithm
         self.actor_policy = actor_nn.to(device)
@@ -50,3 +57,21 @@ class AgentType:
         self.critic_policy = critic_nn.to(device)
         self.critic_target = critic_nn.to(device)
         self.critic_opt = optim.Adam(self.critic_policy.parameters(), lr=critic_lr, weight_decay=critic_weight_decay)
+
+    #------------------------------------------------------------------------------
+
+    def set_training(self,
+                     agent_id   : int,      # the sequential ID of the agent to be modified
+                     on         : bool      # is training to be turned on for this agent?
+                    ):
+        
+        self.train_me[agent_id] = on
+    
+    #------------------------------------------------------------------------------
+
+    def set_policy_use(self,
+                       agent_id     : int,  # the sequential ID of the agent to be modified
+                       use          : bool  # is action policy to be used for this agent? False = random actions
+                      ):
+        
+        self.use_policy[agent_id] = use

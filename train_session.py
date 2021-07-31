@@ -55,7 +55,7 @@ from random_sampler import RandomSampler
 
 #----------------------------------------------------------------------
 
-NAME                = "TEST" #next is DISC00
+NAME                = "DISC01" #next is DISC01
 NUM_RUNS            = 8
 CHKPT_EVERY         = 100
 PRIME               = 0     #num random experiences added to the replay buffer before training begins
@@ -67,13 +67,15 @@ INCR_TSTEP_EVERY    = 8
 FINAL_TIME_STEPS    = 600
 USE_NOISE           = True
 USE_COACHING        = False
+TRAIN_AGENTS        = {"GoalieBrain": [True, False], "StrikerBrain": [True, False]} #agent 0 = red, agent 1 = blue
+USE_POLICY          = {"GoalieBrain": [True, False], "StrikerBrain": [True, False]}
 
 # Define the ranges of hyperparams that will be explored
 vars = [
         ["discrete",            16, 64, 256],               # BATCH
         ["discrete",            1.0        ],          # BAD_STEP_PROB
         ["continuous-float",    0.8,         0.95],          # NOISE_INIT
-        ["continuous-float",    -5.1,       -4.5],          # log10 of 1-NOISE_DECAY
+        ["continuous-float",    -5.0,       -3.0],          # log10 of 1-NOISE_DECAY (was -5.1, -4.5)
         ["continuous-float",    -5.0,       -2.7],          # log10 of actor LR (all agent types)
         ["continuous-float",    0.05,       0.5],          # multiplier on actor LR to get critic LR
         ["discrete",            512, 1024],            # ACTOR_NN_L1 num nodes
@@ -120,9 +122,12 @@ for run in range(NUM_RUNS):
     print("      Critic l1 size = {:d}".format(CRITIC_NN_L1))
     print("      Critic l2 size = {:d}".format(CRITIC_NN_L2))
     print("      Learn every    = {:d}".format(LEARN_EVERY))
+    print("      Agents trained = ", TRAIN_AGENTS)
+    print("      Agent policies = ", USE_POLICY)
 
     # Build the model with the selected hyperparams and train it
-    build_and_train_model(env, run_name, USE_COACHING, BATCH, PRIME, LEARN_EVERY, SEED, GOAL, 0, EPISODES, CHKPT_EVERY, INIT_TIME_STEPS, 
+    build_and_train_model(env, run_name, TRAIN_AGENTS, USE_POLICY, USE_COACHING, BATCH, PRIME, 
+                            LEARN_EVERY, SEED, GOAL, 0, EPISODES, CHKPT_EVERY, INIT_TIME_STEPS, 
                             INCR_TSTEP_EVERY, FINAL_TIME_STEPS, BAD_STEP_PROB, USE_NOISE, NOISE_INIT, NOISE_DECAY,
                             ACTOR_LR, CRITIC_LR, ACTOR_NN_L1, ACTOR_NN_L2, CRITIC_NN_L1, CRITIC_NN_L2, TAU)
 
