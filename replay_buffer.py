@@ -158,10 +158,13 @@ class ReplayBuffer:
                 if self.rewards_exceed_threshold < self.buffer_size//2:
 
                     # while we have a desirable reward at the left end of the deque
-                    while get_max(self.memory[0].reward) > self.reward_threshold:
+                    # (limit this to 10 tries, else we could have an infinite loop if threshold is low)
+                    attempt = 0
+                    while get_max(self.memory[0].reward) > self.reward_threshold  and  attempt < 10:
 
                         # pop it off and push it back onto the right end to save it
                         self.memory.rotate(-1)
+                        attempt += 1
 
             # else (some priming experiences still exist)
             else:
@@ -179,6 +182,13 @@ class ReplayBuffer:
             # if the incoming experience has a good reward, then increment the count
             if get_max(rewards) > self.reward_threshold:
                 self.rewards_exceed_threshold += 1
+            
+            # if the buffer is full (an item will get pushed off the left end) then
+            if len(self.memory) == self.buffer_size:
+
+                # if the left end item has a good reward value, decrement the counter
+                if get_max(self.memory[0].reward) > self.reward_threshold:
+                    self.rewards_exceed_threshold -= 1
     
         # add the experience to the right end of the deque
         e = Experience(states, actions, rewards, next_states, dones)

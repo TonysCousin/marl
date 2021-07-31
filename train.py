@@ -161,6 +161,8 @@ def train(mgr               : AgentMgr,         # manages all agents and their l
     # set up to collect raw & running avg scores at each episode
     scores = []
     avg_scores = []
+    avg_old1 = -np.inf
+    avg_old2 = -np.inf
     sum_steps = 0 #accumulates number of time steps exercised
     max_steps_experienced = 0
     recent_scores = deque(maxlen=AVG_SCORE_EXTENT)
@@ -179,7 +181,7 @@ def train(mgr               : AgentMgr,         # manages all agents and their l
         env_info = env.reset(train_mode=True)
         states = all_agent_states(env_info, agent_types)
         mgr.reset()
-        score = 0 # total score for this episode
+        score = 0.0 # total score for this episode
 
         #print("\n\n/////Begin episode ", ep, "/////\n")
 
@@ -195,12 +197,7 @@ def train(mgr               : AgentMgr,         # manages all agents and their l
             states, rewards, dones = time_step(mgr, env, use_coaching, prng, agent_types, states)
 
             # add this step's reward to the episode score
-            score += max_rewards(agent_types, rewards)
-        #HEY JOHN:  check value of rewards carefully - are these future reward values now?
-        #ALSO:  what does score mean here?  Do I want the max_rewards value?  What if only one team is being trained?
-
-
-
+            score += mgr.compute_time_step_score(rewards)
 
             # if the episode is complete, update the record time steps in an episode and stop the time step loop
             if any_dones(agent_types, dones):
@@ -268,9 +265,15 @@ def train(mgr               : AgentMgr,         # manages all agents and their l
             break
 
         # if this solution is clearly going nowhere, then abort early
-        if ep > starting_episode + ABORT_EPISODE:
+        if ep % 100 == 0:
+            avg_old2 = avg_old1
+            avg_old1 = avg_score
+        if ep > starting_episode + ABORT_EPISODE  and  mgr.get_noise_level() < 0.01:
             hit_rate = float(mem_stats[1]) / ep
-            if hit_rate < 0.025  or  (rem_time > 2.0  and  ep > starting_episode + 2*ABORT_EPISODE  and   hit_rate < 0.06):
+            poor1 = hit_rate < 0.025  or  (rem_time > 2.0  and  ep > starting_episode + 2*ABORT_EPISODE  and   hit_rate < 0.06)
+            diff = 0.2*max(abs(avg_score), abs(avg_old2), abs(avg_old1), abs(training_goal))
+            poor2 = avg_score < avg_old1 - diff  and  avg_old1 < avg_old2 - diff
+            if poor1 or poor2:
                 print("\n* Aborting due to inadequate progress.")
                 print("Final noise level = {:6.4f}".format(mgr.get_noise_level()))
                 break

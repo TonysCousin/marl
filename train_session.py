@@ -55,16 +55,16 @@ from random_sampler import RandomSampler
 
 #----------------------------------------------------------------------
 
-NAME                = "DISC01" #next is DISC01
+NAME                = "DISC04" #next is 
 NUM_RUNS            = 8
-CHKPT_EVERY         = 100
+CHKPT_EVERY         = 500
 PRIME               = 0     #num random experiences added to the replay buffer before training begins
 SEED                = 5555  #0, 111, 468, 5555, 23100, 44939
 GOAL                = 0.8   #avg reward needed to be considered a satisfactory solution
-EPISODES            = 1001  #max num episodes per run
-INIT_TIME_STEPS     = 500   #prefer 500 - 600
+EPISODES            = 3001  #max num episodes per run
+INIT_TIME_STEPS     = 800   #prefer 500 - 600
 INCR_TSTEP_EVERY    = 8
-FINAL_TIME_STEPS    = 600
+FINAL_TIME_STEPS    = 800
 USE_NOISE           = True
 USE_COACHING        = False
 TRAIN_AGENTS        = {"GoalieBrain": [True, False], "StrikerBrain": [True, False]} #agent 0 = red, agent 1 = blue
@@ -74,16 +74,16 @@ USE_POLICY          = {"GoalieBrain": [True, False], "StrikerBrain": [True, Fals
 vars = [
         ["discrete",            16, 64, 256],               # BATCH
         ["discrete",            1.0        ],          # BAD_STEP_PROB
-        ["continuous-float",    0.8,         0.95],          # NOISE_INIT
-        ["continuous-float",    -5.0,       -3.0],          # log10 of 1-NOISE_DECAY (was -5.1, -4.5)
-        ["continuous-float",    -5.0,       -2.7],          # log10 of actor LR (all agent types)
+        ["continuous-float",    0.85,         0.98],          # NOISE_INIT
+        ["continuous-float",    -5.2,       -4.5],          # log10 of 1-NOISE_DECAY (was -5.1, -4.5)
+        ["continuous-float",    -5.0,       -2.9],          # log10 of actor LR (all agent types)
         ["continuous-float",    0.05,       0.5],          # multiplier on actor LR to get critic LR
-        ["discrete",            512, 1024],            # ACTOR_NN_L1 num nodes
+        ["discrete",            1024],            # ACTOR_NN_L1 num nodes
         ["discrete",            4, 8],                      # ACTOR_NN_L2 divisor (from l1)
         ["discrete",            1536, 2048, 3072],    # CRITIC_NN_L1 num nodes
         ["discrete",            4, 8],                       # CRITIC_NN_L2 divisor (from l1)
         ["discrete",            1],                    # LEARN_EVERY
-        ["continuous-float",   -4.0, -2.0]                 # log10 of TAU
+        ["continuous-float",   -4.5, -3.0]                 # log10 of TAU
        ]
 rs = RandomSampler(vars)
 

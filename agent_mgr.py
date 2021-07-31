@@ -29,8 +29,7 @@ MOST_OF_TIME = 0.0
 
 #TODO: this threshold should be a param, since it may be game dependent
 # experience reward value above which is considered a desirable experience
-#TODO: change this to -1 or so?
-REWARD_THRESHOLD = 0.1 #flags experiences with a goal scored
+REWARD_THRESHOLD = 0.0
 
 
 
@@ -185,6 +184,23 @@ class AgentMgr:
 
     #------------------------------------------------------------------------------
 
+    """Returns a score (double) for a single experience, based on the rewards earned
+        by each agent that is flagged to be trained in that time step."""
+
+    def compute_time_step_score(self, 
+                                rewards : {}    # dict with each entry is a list of rewards for each agent of that type
+                               ):
+        
+        score = 0.0
+        for t in rewards:
+            for i, r in enumerate(rewards[t]):
+                if self.agent_types[t].train_me[i]:
+                    score += r
+        
+        return score
+
+    #------------------------------------------------------------------------------
+
     """Returns a dict of AgentType that provides info on all the types in use."""
 
     def get_agent_types(self):
@@ -244,6 +260,14 @@ class AgentMgr:
                              ):
 
         act = {}
+        RANDOM_MEAN = 0.0
+        RANDOM_SD = 0.04
+
+
+
+        flags = "" #TODO: debug only
+
+
 
         if self.learning_underway  or  is_inference:
             for t in self.agent_types:
@@ -256,8 +280,9 @@ class AgentMgr:
 
                     # if this agent is not using its policy then it has to be random
                     if not at.use_policy[i]:
-                        actions[i, :] = self.prng.random(at.action_size)
+                        actions[i, :] = self.prng.normal(RANDOM_MEAN, RANDOM_SD, at.action_size) #approximate the policy NN outputs
                         noise_added = True
+                        flags = flags + '-'
 
                     # add noise if appropriate by selecting a random action
                     elif add_noise  or  self.use_noise:
@@ -272,15 +297,17 @@ class AgentMgr:
                             
                             # otherwise, let's pick a truly random action to have fun with
                             else:
-                                actions[i, :] = self.prng.random(at.action_size)
+                                actions[i, :] = self.prng.normal(RANDOM_MEAN, RANDOM_SD, at.action_size) #approximate the policy NN outputs
 
                             noise_added = True
+                            flags = flags + '-'
 
                     # else get the action for this agent from its policy NN
                     if not noise_added:
                         s = torch.from_numpy(states[t][i]).float().to(DEVICE)
                         with torch.no_grad():
                             actions[i] = at.actor_policy(s).cpu().data.numpy() #returns an array representing all possible actions for this agent
+                        flags = flags + '!'
 
                 at.actor_policy.train()
 
@@ -302,8 +329,11 @@ class AgentMgr:
                 at = self.agent_types[t]
                 actions = np.empty((at.num_agents, at.action_size), dtype=float) #one row for each agent of this type
                 for i in range(at.num_agents):
-                    actions[i, :] = self.prng.random(at.action_size)
+                    actions[i, :] = self.prng.normal(RANDOM_MEAN, RANDOM_SD, at.action_size) #approximate the policy NN outputs
                 act[t] = actions
+
+        #print("act: ", flags)
+        #debug_actions(self.agent_types, act, states, " ")
 
         return act
 
