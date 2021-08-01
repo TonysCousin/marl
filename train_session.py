@@ -55,7 +55,7 @@ from random_sampler import RandomSampler
 
 #----------------------------------------------------------------------
 
-NAME                = "DISC04" #next is 
+NAME                = "DISC06" #next is 
 NUM_RUNS            = 8
 CHKPT_EVERY         = 500
 PRIME               = 0     #num random experiences added to the replay buffer before training begins
@@ -66,13 +66,13 @@ INIT_TIME_STEPS     = 800   #prefer 500 - 600
 INCR_TSTEP_EVERY    = 8
 FINAL_TIME_STEPS    = 800
 USE_NOISE           = True
-USE_COACHING        = False
+USE_COACHING        = True
 TRAIN_AGENTS        = {"GoalieBrain": [True, False], "StrikerBrain": [True, False]} #agent 0 = red, agent 1 = blue
 USE_POLICY          = {"GoalieBrain": [True, False], "StrikerBrain": [True, False]}
 
 # Define the ranges of hyperparams that will be explored
 vars = [
-        ["discrete",            16, 64, 256],               # BATCH
+        ["discrete",            256, 512],               # BATCH
         ["discrete",            1.0        ],          # BAD_STEP_PROB
         ["continuous-float",    0.85,         0.98],          # NOISE_INIT
         ["continuous-float",    -5.2,       -4.5],          # log10 of 1-NOISE_DECAY (was -5.1, -4.5)

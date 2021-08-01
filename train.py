@@ -100,8 +100,8 @@ def build_and_train_model(env                   : UnityEnvironment,
     prng = np.random.default_rng(seed)
 
     # create the agent manager
-    mgr = AgentMgr(env, agent_models, batch_size=batch, buffer_prime=prime, learn_every=learn_every, bad_step_prob=bad_step_prob,
-                    use_noise=use_noise, noise_init=noise_init, noise_decay=noise_decay, update_factor=update_factor, prng=prng)
+    mgr = AgentMgr(env, agent_models, batch_size=batch, buffer_size=500000, buffer_prime=prime, learn_every=learn_every, bad_step_prob=bad_step_prob,
+                    use_noise=use_noise, noise_init=noise_init, noise_decay=noise_decay, discount_factor=0.996, update_factor=update_factor, prng=prng)
 
     # if the starting episode is non-zero, then use the agent manager to restore the NN models from an appropriate checkpoint
     if start_episode > 0:
@@ -352,57 +352,47 @@ def max_rewards(types: {},  # dict of AgentType describing all agent types
 
 #TODO: make this a callback supplied by the game-specific code
 
-"""Modifies the actions beyond what the model provides (i.e. coaching guidance), in order to
-    accelerate learning. Early experience shows that learning finds a big local maximum
-    in the rewards, achieved by strikers standing around doing nothing, thus their
-    goalies don't get scored against. This function encourages strikers to move toward
+"""Modifies the actions beyond what the model provides (i.e. provides coaching guidance), 
+    in order to accelerate learning. Early experience shows that learning tends to find
+    a local maximum in the rewards. This function encourages strikers to move toward
     the ball in order to keep it in motion.  If the striker doesn't see the ball, it
-    is encouraged to move backwards (it can't see behind); if it sees the ball to the right
+    is encouraged to turn and look (it can't see behind); if it sees the ball to the right
     it is encouraged to move right; if it sees the ball to the left, it is encouraged to
     move left; and if it sees the ball in front it is encouranged to move forward.
-    Encouragement is in the form of an action override "most of the time".
+    Encouragement is in the form of an action override.
 
-    Return: tuple of (updated actions dict, bool indicating whether updates were done)
+    Return: updated actions dict with full vector of possible actions for each agent
 """
 
-def modify_actions(prng         : np.random.Generator, # random number generator
-                   types        : {},   # dict of AgentType describing all agent types
+def modify_actions(types        : {},   # dict of AgentType describing all agent types
                    actions      : {},   # dict of arrays of all possible action scores for each agent of each type
                    states       : {}    # dict of current states for each agent type; each entry is
                                         # ndarray[n, x], where n is number of agents of that type
                   ):
 
-    mods_done = False
-    
-    # if the prng has not been defined then we can't do anything here
-    if prng == None:
-        return (actions, mods_done)
-
     # observe the final 112 elements of the state vector, which is the current time step
     start = 2*112
 
-    # define how often coaching will be injected
-    MOST_OF_TIME = 0.6
+    # set up a mapping of desired actions vs observations
+    ball_forward_action = {"GoalieBrain": 1, "StrikerBrain": 0} #goalie back, striker forward
+    ball_left_action    = {"GoalieBrain": 3, "StrikerBrain": 4} #everybody moves left
+    ball_right_action   = {"GoalieBrain": 2, "StrikerBrain": 5} #everybody moves right
+    ball_unknown_action = {"GoalieBrain": 1, "StrikerBrain": 2} #goalie back up, striker turn right
+    
+    # loop through each agent
+    for t in types:
+        at = types[t]
+        for agent in range(states[t].shape[0]):
 
-    # if it is randomly selected then
-    if prng.random() < MOST_OF_TIME:
-
-        # set up a mapping of desired actions vs observations
-        ball_forward_action = {"GoalieBrain": 1, "StrikerBrain": 0} #goalie back, striker forward
-        ball_left_action    = {"GoalieBrain": 3, "StrikerBrain": 4} #everybody moves left
-        ball_right_action   = {"GoalieBrain": 2, "StrikerBrain": 5} #everybody moves right
-        ball_unknown_action = {"GoalieBrain": 1, "StrikerBrain": 1} #everybody back up
-        
-        # loop through each agent
-        for t in types:
-            for agent in range(states[t].shape[0]):
+            # if this particular agent is being trained then
+            if at.train_me[agent]:
 
                 # get each of the 14 ray traces from the current time step & see if first element indicates it sees the ball
                 is_ball = np.empty(14, dtype=bool)
                 for ray in range(14):
                     is_ball[ray] = states[t][agent, start + 8*ray] > 0.5 #first element in each 8-element ray indicates it sees the ball
 
-                # find the current largest vector element and its value                
+                # find the current largest action vector element and its value                
                 am = np.argmax(actions[t][agent])
                 max_val = actions[t][agent, am]
 
@@ -421,10 +411,8 @@ def modify_actions(prng         : np.random.Generator, # random number generator
                 # else we don't know where the ball is
                 else:
                     actions[t][agent, ball_unknown_action[t]] = max_val + 0.0001 #this is now the largest value in the vector
-        
-        mods_done = True
-
-    return (actions, mods_done)
+    
+    return actions
 
 #------------------------------------------------------------------------------
 
@@ -536,8 +524,8 @@ def time_step(model         : AgentMgr,         # manager for all agetns and env
     av = model.get_raw_action_vector(states) #returns dict of ndarray, with each entry having a row for each agent (scores for all possible actions)
     coaching_flag = " "
     if use_coaching:
-        actions, was_coached = modify_actions(prng, agent_types, av, states)
-        if was_coached:
+        if prng.random() < 0.5 * model.get_noise_level(): #coaching overrides model's random noise, so allow that to get through half the time
+            av = modify_actions(agent_types, av, states)
             coaching_flag = "*"
     actions = model.find_best_action(av)
     #debug_actions(agent_types, actions, states, coaching_flag) #takes in actions as integer values (one per agent)
