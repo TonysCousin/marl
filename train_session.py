@@ -46,6 +46,7 @@
 # a huge impediment to learning desirable behavior.
 #
 
+from agent_type import AgentBehavior
 import math
 
 from unityagents    import UnityEnvironment
@@ -55,20 +56,22 @@ from random_sampler import RandomSampler
 
 #----------------------------------------------------------------------
 
-NAME                = "DISC06" #next is 
+NAME                = "DISC07" #next is 
 NUM_RUNS            = 8
 CHKPT_EVERY         = 500
 PRIME               = 0     #num random experiences added to the replay buffer before training begins
 SEED                = 5555  #0, 111, 468, 5555, 23100, 44939
 GOAL                = 0.8   #avg reward needed to be considered a satisfactory solution
-EPISODES            = 3001  #max num episodes per run
+EPISODES            = 2001  #max num episodes per run
 INIT_TIME_STEPS     = 800   #prefer 500 - 600
 INCR_TSTEP_EVERY    = 8
 FINAL_TIME_STEPS    = 800
 USE_NOISE           = True
 USE_COACHING        = True
-TRAIN_AGENTS        = {"GoalieBrain": [True, False], "StrikerBrain": [True, False]} #agent 0 = red, agent 1 = blue
-USE_POLICY          = {"GoalieBrain": [True, False], "StrikerBrain": [True, False]}
+BEHAVIORS           = {"GoalieBrain":  [AgentBehavior.Learn, AgentBehavior.Uniform], #index 0 = red, 1 = blue
+                       "StrikerBrain": [AgentBehavior.Learn, AgentBehavior.Uniform]}
+UNIFORM_ACTIONS     = {"GoalieBrain":  [-0.1, -0.1, -0.1, 0.05], #move left
+                       "StrikerBrain": [-0.1, -0.1, -0.1, -0.1, 0.05, -0.1]} #move left
 
 # Define the ranges of hyperparams that will be explored
 vars = [
@@ -122,11 +125,10 @@ for run in range(NUM_RUNS):
     print("      Critic l1 size = {:d}".format(CRITIC_NN_L1))
     print("      Critic l2 size = {:d}".format(CRITIC_NN_L2))
     print("      Learn every    = {:d}".format(LEARN_EVERY))
-    print("      Agents trained = ", TRAIN_AGENTS)
-    print("      Agent policies = ", USE_POLICY)
+    print("      Agent behaviors= ", BEHAVIORS)
 
     # Build the model with the selected hyperparams and train it
-    build_and_train_model(env, run_name, TRAIN_AGENTS, USE_POLICY, USE_COACHING, BATCH, PRIME, 
+    build_and_train_model(env, run_name, BEHAVIORS, UNIFORM_ACTIONS, USE_COACHING, BATCH, PRIME, 
                             LEARN_EVERY, SEED, GOAL, 0, EPISODES, CHKPT_EVERY, INIT_TIME_STEPS, 
                             INCR_TSTEP_EVERY, FINAL_TIME_STEPS, BAD_STEP_PROB, USE_NOISE, NOISE_INIT, NOISE_DECAY,
                             ACTOR_LR, CRITIC_LR, ACTOR_NN_L1, ACTOR_NN_L2, CRITIC_NN_L1, CRITIC_NN_L2, TAU)

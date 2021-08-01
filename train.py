@@ -1,6 +1,7 @@
 # Performs the training of all agents of all types. For now, it assumes the environment is
 # based on the Unity ML-Agents framework.
 
+from agent_type import AgentBehavior
 import numpy as np
 import time
 import copy
@@ -66,8 +67,8 @@ def build_model(actor_lr              : float,
 
 def build_and_train_model(env                   : UnityEnvironment,
                           name                  : str,
-                          train_agents          : {},               # one entry for each agent type; value is a list of bool training flags
-                          use_policies          : {},               # one entry for each agent type; value is a list of bool policy flags
+                          behaviors             : {},
+                          uniform_action        : {},
                           use_coaching          : bool,
                           batch                 : int,
                           prime                 : int,
@@ -107,20 +108,11 @@ def build_and_train_model(env                   : UnityEnvironment,
     if start_episode > 0:
         mgr.restore_checkpoint(CHECKPOINT_PATH, name, start_episode)
 
-    # modify any individual agents who may need to skip training or use of policy NNs
-    if len(train_agents) != len(use_policies):
-        print("\n\n///// ERROR: build_and_train_model - differing lengths of train_agents and use_policies.")
-        return
-    for t in train_agents: #assume train_agents and use_policies are the same length
-        training = train_agents[t]
-        policy = use_policies[t]
-        if len(training) != len(policy):
-            print("\n///// ERROR: build_and_train_model - inconsistent number of agents indicated for agent type ", t)
-            return
-        for a in range(len(training)): #assume same number of agents indicated in each list
-            # look for any flag that is false (default values are all true); if so then modify the agent object
-            if not training[a]  or  not policy[a]:
-                mgr.modify_behavior(t, a, training[a], policy[a])
+    # modify any individual agents who are not going to be trained as usual
+    for t in behaviors:
+        for a in range(len(behaviors[t])):
+            if behaviors[t][a] != AgentBehavior.Learn:
+                mgr.modify_behavior(t, a, behaviors[t][a], uniform_action[t]) #can't support annealing yet
 
     train(mgr, env, run_name=name, starting_episode=start_episode, max_episodes=episodes, chkpt_interval=chkpt_every, training_goal=goal,
           init_time_steps=init_time_steps, incr_time_steps_every=incr_time_steps_every, final_time_steps=final_time_steps, prng=prng,
@@ -385,7 +377,7 @@ def modify_actions(types        : {},   # dict of AgentType describing all agent
         for agent in range(states[t].shape[0]):
 
             # if this particular agent is being trained then
-            if at.train_me[agent]:
+            if at.behavior[agent] == AgentBehavior.Learn:
 
                 # get each of the 14 ray traces from the current time step & see if first element indicates it sees the ball
                 is_ball = np.empty(14, dtype=bool)

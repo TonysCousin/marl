@@ -14,7 +14,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from unityagents    import UnityEnvironment
-from agent_type     import AgentType
+from agent_type     import AgentBehavior, AgentType
 from agent_models   import AgentModels
 from replay_buffer  import ReplayBuffer
 from utils          import get_max
@@ -112,18 +112,14 @@ class AgentMgr:
             ns = len(type_info.vector_observations[0])
             na = brain.vector_action_space_size
             num_agents = len(type_info.agents)
-            train_it = [True] * num_agents
-            use_policy = [True] * num_agents
             actor = agent_models.get_actor_nn_for(name)
             critic = agent_models.get_critic_nn_for(name)
             actor_lr = agent_models.get_actor_lr_for(name)
             critic_lr = agent_models.get_critic_lr_for(name)
             actor_weight_decay = agent_models.get_actor_weight_decay_for(name)
             critic_weight_decay = agent_models.get_critic_weight_decay_for(name)
-            self.agent_types[name] = AgentType(DEVICE, name, brain, ns, na, num_agents, train_it, use_policy,
+            self.agent_types[name] = AgentType(DEVICE, name, brain, ns, na, num_agents,
                                                actor, critic, actor_lr, critic_lr, actor_weight_decay, critic_weight_decay)
-        
-
         
         # initialize other internal stuff
         self.learning_underway = True #if priming replay buffer, use False here and have step() flip it when buffer is primed
@@ -154,13 +150,6 @@ class AgentMgr:
         self.ep_next_st = []
         self.ep_dones = []
 
-
-
-
-
-
-        self.erb.store_types(self.agent_types) #TODO: debug only!
-
     #------------------------------------------------------------------------------
 
     """Flags a specific agent for modified behavior.  When training, an agent flagged for skipped training
@@ -175,12 +164,12 @@ class AgentMgr:
     def modify_behavior(self,
                         agent_type     : AgentType,     # type of agent to be modified
                         agent_id       : int,           # sequential ID of the individual agent of this type to be modified
-                        train          : bool,          # should this agent be subjected to the learning algorithm?
-                        use_policy     : bool = True    # should this agent use its policy NN to determine its actions?
+                        behavior       : AgentBehavior, # the behavior to be used by this agent
+                        uniform_act    : [] = None,     # vector of raw action values to be used in a Uniform behavior
+                        anneal_rate    : float = 1.0    # annealing rate to be used for AnnealedRandom behavior; value must be in [0, 1]
                        ):
         
-        self.agent_types[agent_type].set_training(agent_id, train)
-        self.agent_types[agent_type].set_policy_use(agent_id, use_policy)
+        self.agent_types[agent_type].set_behavior(agent_id, behavior, uniform_act, anneal_rate)
 
     #------------------------------------------------------------------------------
 
@@ -194,7 +183,7 @@ class AgentMgr:
         score = 0.0
         for t in rewards:
             for i, r in enumerate(rewards[t]):
-                if self.agent_types[t].train_me[i]:
+                if self.agent_types[t].behavior[i] == AgentBehavior.Learn:
                     score += r
         
         return score
@@ -278,36 +267,60 @@ class AgentMgr:
                 for i in range(at.num_agents):
                     noise_added = False
 
-                    # if this agent is not using its policy then it has to be random
-                    if not at.use_policy[i]:
+                    # if this agent is assigned to be random or annealing toward randomness then assing random action
+                    if at.behavior[i] == AgentBehavior.Random  or  at.behavior[i] == AgentBehavior.AnnealedRandom:
+
+                        # for now, only Random is supported
                         actions[i, :] = self.prng.normal(RANDOM_MEAN, RANDOM_SD, at.action_size) #approximate the policy NN outputs
                         noise_added = True
                         flags = flags + '-'
 
-                    # add noise if appropriate by selecting a random action
-                    elif add_noise  or  self.use_noise:
-                        if self.prng.random() < self.noise_level:
+                    # else if this agent is to be learning then
+                    elif at.behavior[i] == AgentBehavior.Learn:
 
-                            # Now that we have decided to make some noise for this agent, we would like the action to be
-                            # not quite random.  Most of the time we want it to continue doing what it did in the previous
-                            # time step so as to exhibit smooth motion, not herky-jerky.  Therefore, if a random draw in
-                            # [0, 1) < "most of the time" threshold, just copy the previous action
-                            if not self.first_time_step  and  self.prng.random() < MOST_OF_TIME:
-                                actions[i, :] = self.prev_act[t][i, :]
-                            
-                            # otherwise, let's pick a truly random action to have fun with
-                            else:
-                                actions[i, :] = self.prng.normal(RANDOM_MEAN, RANDOM_SD, at.action_size) #approximate the policy NN outputs
+                        # add noise if appropriate by selecting a random action
+                        if add_noise  or  self.use_noise:
+                            if self.prng.random() < self.noise_level:
 
-                            noise_added = True
-                            flags = flags + '-'
+                                # Now that we have decided to make some noise for this agent, we would like the action to be
+                                # not quite random.  Most of the time we want it to continue doing what it did in the previous
+                                # time step so as to exhibit smooth motion, not herky-jerky.  Therefore, if a random draw in
+                                # [0, 1) < "most of the time" threshold, just copy the previous action
+                                if not self.first_time_step  and  self.prng.random() < MOST_OF_TIME:
+                                    actions[i, :] = self.prev_act[t][i, :]
+                                
+                                # otherwise, let's pick a truly random action to have fun with
+                                else:
+                                    actions[i, :] = self.prng.normal(RANDOM_MEAN, RANDOM_SD, at.action_size) #approximate the policy NN outputs
 
-                    # else get the action for this agent from its policy NN
-                    if not noise_added:
+                                noise_added = True
+                                flags = flags + '-'
+
+                        # else get the action for this agent from its policy NN
+                        if not noise_added:
+                            s = torch.from_numpy(states[t][i]).float().to(DEVICE)
+                            with torch.no_grad():
+                                actions[i] = at.actor_policy(s).cpu().data.numpy() #returns an array representing all possible actions for this agent
+                            flags = flags + '!'
+                    
+                    # else if this agent is to follow policy only then do so
+                    elif at.behavior[i] == AgentBehavior.Policy:
                         s = torch.from_numpy(states[t][i]).float().to(DEVICE)
                         with torch.no_grad():
                             actions[i] = at.actor_policy(s).cpu().data.numpy() #returns an array representing all possible actions for this agent
                         flags = flags + '!'
+                    
+                    # else if this agent is to exhibit uniform actions then
+                    elif at.behavior[i] == AgentBehavior.Uniform:
+
+                        # use the given uniform action vector as the output
+                        actions[i] = at.uniform_action_vector[i]
+                    
+                    # else - unknown behavior
+                    else:
+                        print("\n///// ERROR: AgentMgr.get_raw_action_vector: unkown agent behavior ", at.behavior[i])
+                        return act
+
 
                 at.actor_policy.train()
 
@@ -489,7 +502,7 @@ class AgentMgr:
             for agent in range(at.num_agents):
 
                 # if this agent is using its policy NN then
-                if at.use_policy[agent]:
+                if at.behavior[agent] == AgentBehavior.Learn  or  at.behavior[agent] == AgentBehavior.Policy:
 
                     # grab next state vectors and use this agent's target network to predict next actions
                     ns = next_states[t][:, agent, :]
@@ -521,8 +534,8 @@ class AgentMgr:
             at = self.agent_types[t]
 
             # if there is at least one agent of this type that is being trained then
-            if any(at.train_me):
-                num_agents_being_trained = sum(at.use_policy)
+            num_agents_being_trained = self.count_agents_being_trained(at)
+            if num_agents_being_trained > 0:
                 agents_updated = 0
 
                 # compute the Q values for the next states/actions from the target model for this type
@@ -534,38 +547,37 @@ class AgentMgr:
 
                 for agent in range(at.num_agents):
 
-                    # if this agent is not learning then skip it
-                    if not at.train_me[agent]:
-                        continue
+                    # if this agent is learning then
+                    if at.behavior[agent] == AgentBehavior.Learn:
 
-                    # Compute Q targets for current states (y_i) for this agent
-                    q_targets = r[:, agent] + self.gamma*q_targets_next*(1.0 - d[:, agent])
+                        # Compute Q targets for current states (y_i) for this agent
+                        q_targets = r[:, agent] + self.gamma*q_targets_next*(1.0 - d[:, agent])
 
-                    # use the current policy to compute the expected Q value for current states & actions
-                    q_expected = at.critic_policy(states_all, actions_all).squeeze()
+                        # use the current policy to compute the expected Q value for current states & actions
+                        q_expected = at.critic_policy(states_all, actions_all).squeeze()
 
-                    # use the current policy to compute the critic loss for this agent
-                    critic_loss = F.mse_loss(q_expected, q_targets) #q_targets was previously detached
+                        # use the current policy to compute the critic loss for this agent
+                        critic_loss = F.mse_loss(q_expected, q_targets) #q_targets was previously detached
 
-                    # minimize the loss
-                    at.critic_opt.zero_grad()
-                    retain = agents_updated < num_agents_being_trained - 1
-                    critic_loss.backward(retain_graph=retain)
-                    torch.nn.utils.clip_grad_norm_(at.critic_policy.parameters(), 1.0)
-                    at.critic_opt.step()
-                    agents_updated += 1
+                        # minimize the loss
+                        at.critic_opt.zero_grad()
+                        retain = agents_updated < num_agents_being_trained - 1
+                        critic_loss.backward(retain_graph=retain)
+                        torch.nn.utils.clip_grad_norm_(at.critic_policy.parameters(), 1.0)
+                        at.critic_opt.step()
+                        agents_updated += 1
 
         #.........Update the actor NNs based on learning losses
 
         for t in self.agent_types:
             at = self.agent_types[t]
-            num_agents_being_trained = sum(at.use_policy)
+            num_agents_being_trained = self.count_agents_being_trained(at)
             agents_updated = 0
 
             for agent in range(at.num_agents):
 
                 # if we are training this agent then
-                if at.train_me[agent]:
+                if at.behavior[agent] == AgentBehavior.Learn:
 
                     # compute the actor loss
                     actor_loss = -at.critic_policy(states_all, cur_actions).mean()
@@ -588,11 +600,25 @@ class AgentMgr:
             for agent in range(at.num_agents):
 
                 # if this agent is being trained then
-                if at.train_me[agent]:
+                if at.behavior[agent] == AgentBehavior.Learn:
 
                     # perform a soft update on the critic & actor target NNs for each agent type
                     self.soft_update(at.critic_policy, at.critic_target)
                     self.soft_update(at.actor_policy, at.actor_target)
+
+    #------------------------------------------------------------------------------
+
+    """Counts the number of agents of the given type that are being asked to learn."""
+
+    def count_agents_being_trained(self,
+                                   at    : AgentType # the type of agent we are counting
+                                  ):
+
+            count = 0
+            for a in range(at.num_agents):
+                if at.behavior[a] == AgentBehavior.Learn:
+                    count += 1
+            return count
 
     #------------------------------------------------------------------------------
 

@@ -8,8 +8,21 @@ from numpy.core.numeric import ones
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import enum
 from typing import List
 import unityagents
+
+
+"""Categories of behavior to be applied to each agent."""
+
+class AgentBehavior(enum.Enum):
+    Learn           = 0 # always learning from experiences and executing its latest policy
+    Policy          = 1 # always following the latest policy for its type, but not learning
+    Random          = 2 # always exhibiting random actions (ignores policy)
+    Uniform         = 3 # always chooses the same action (must be specified separately)
+    AnnealedRandom  = 4 # gradually changes from Uniform to Random (annealing rate specified separately)
+
+#------------------------------------------------------------------------------
 
 class AgentType:
 
@@ -29,9 +42,6 @@ class AgentType:
                  state_size             : int,                                  # number of elements in the state vector
                  action_size            : int,                                  # number of possible actions
                  num_agents             : int,                                  # number of agents of this type in the scenario
-                 train_me               : List[bool],                           # a bool entry for each agent; is it to be trained?
-                 use_policy             : List[bool],                           # a bool entry for each agent; is it to use policy NN for actions?
-                                                                                #   False indicates it will always provide random actions
                  actor_nn               : nn.Module,                            # neural network that maps states -> actions for all agents of this type
                  critic_nn              : nn.Module,                            # neural network used to predict Q value for the actor NN
                  actor_lr               : float,                                # learning rate for the actor NN
@@ -46,8 +56,12 @@ class AgentType:
         self.state_size = state_size
         self.action_size = action_size
         self.num_agents = num_agents
-        self.train_me = train_me
-        self.use_policy = use_policy
+
+        # set the defaults for behavior for each agent of this type
+        self.behavior = [AgentBehavior.Learn] * self.num_agents
+        self.uniform_action_vector = [None] * self.num_agents
+        self.anneal_rate = [1.0] * self.num_agents
+        self.anneal_mult = [1.0] * self.num_agents
 
         # create the NNs and move them to the compute device - this is set up to support the MADDPG learning algorithm
         self.actor_policy = actor_nn.to(device)
@@ -60,18 +74,20 @@ class AgentType:
 
     #------------------------------------------------------------------------------
 
-    def set_training(self,
-                     agent_id   : int,      # the sequential ID of the agent to be modified
-                     on         : bool      # is training to be turned on for this agent?
+    """Allows override of the default behavior specification for the given agent within this type. Optional params
+        uniform_act and anneal_rate only apply to certain kinds of behavior. If AnnealedRandom behavior is chosen,
+        then the anneal_rate specifies how quickly the behavior changes from uniform to random: a value of 1.0 will
+        keep the behavior uniform forever, while 0.0 will move it to fully random in one time step. Values in
+        between act as a rate of decay of the uniformity gradually into more and more randomness."""
+
+    def set_behavior(self,
+                     agent_id   : int,              # the sequential ID of the agent to be modified
+                     behavior   : AgentBehavior,    # the behavior to be used by this agent
+                     uniform_act: [] = None,        # vector of raw action values to be used in a Uniform behavior
+                     anneal_rate: float = 1.0       # annealing rate to be used for AnnealedRandom behavior; value must be in [0, 1]
                     ):
         
-        self.train_me[agent_id] = on
-    
-    #------------------------------------------------------------------------------
-
-    def set_policy_use(self,
-                       agent_id     : int,  # the sequential ID of the agent to be modified
-                       use          : bool  # is action policy to be used for this agent? False = random actions
-                      ):
-        
-        self.use_policy[agent_id] = use
+        self.behavior[agent_id] = behavior
+        self.uniform_action_vector[agent_id] = uniform_act
+        self.anneal_rate[agent_id] = max(min(anneal_rate, 1.0), 0.0)
+        self.anneal_mult[agent_id] = 1.0 #reset the annealing process to begin after this call

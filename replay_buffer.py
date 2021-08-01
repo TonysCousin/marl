@@ -112,14 +112,6 @@ class ReplayBuffer:
 
     #------------------------------------------------------------------------------
 
-        #TODO:  this section for debug only!
-        self.agent_types = None
-
-    def store_types(self, t):
-        self.agent_types = t
-
-    #------------------------------------------------------------------------------
-
     """Add a new experience to memory."""
     """Add a new experience to the buffer.
 		We want to preserve existing 'good' experiences to a large extent.  When the
@@ -137,16 +129,6 @@ class ReplayBuffer:
              next_states    : {},           # dict of next states after actions are taken; each entry an agent type
              dones          : {}            # dict of done flags, each entry an agent type, which is a list of bools
            ):
-
-
-
-
-        #print("replay_buffer.add():")
-        #debug_actions(self.agent_types, actions, states, " ")
-
-
-
-
 
         # if the buffer is already full then (we don't want to lose good experiences)
         if len(self.memory) == self.buffer_size:
@@ -281,15 +263,6 @@ class ReplayBuffer:
                     rewards[agent_type] = tr
                     next_states[agent_type] = tn
                     dones[agent_type] = td
-
-
-
-                #TODO debug only
-                #print("replay_buffer.sample():")
-                #debug_actions_tensor(self.agent_types, actions, states, " ")
-
-
-
 
                 return (states, actions, rewards, next_states, dones)
 
