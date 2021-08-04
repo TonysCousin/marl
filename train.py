@@ -73,6 +73,7 @@ def build_and_train_model(env                   : UnityEnvironment,
                           batch                 : int,
                           prime                 : int,
                           learn_every           : int,
+                          learn_iters           : int,
                           seed                  : int,
                           goal                  : float,
                           start_episode         : int,
@@ -101,7 +102,7 @@ def build_and_train_model(env                   : UnityEnvironment,
     prng = np.random.default_rng(seed)
 
     # create the agent manager
-    mgr = AgentMgr(env, agent_models, batch_size=batch, buffer_size=500000, buffer_prime=prime, learn_every=learn_every, bad_step_prob=bad_step_prob,
+    mgr = AgentMgr(env, agent_models, batch_size=batch, buffer_size=500000, buffer_prime=prime, bad_step_prob=bad_step_prob,
                     use_noise=use_noise, noise_init=noise_init, noise_decay=noise_decay, discount_factor=0.996, update_factor=update_factor, prng=prng)
 
     # if the starting episode is non-zero, then use the agent manager to restore the NN models from an appropriate checkpoint
@@ -115,8 +116,8 @@ def build_and_train_model(env                   : UnityEnvironment,
                 mgr.modify_behavior(t, a, behaviors[t][a], uniform_action[t]) #can't support annealing yet
 
     train(mgr, env, run_name=name, starting_episode=start_episode, max_episodes=episodes, chkpt_interval=chkpt_every, training_goal=goal,
-          init_time_steps=init_time_steps, incr_time_steps_every=incr_time_steps_every, final_time_steps=final_time_steps, prng=prng,
-          use_coaching=use_coaching)
+          init_time_steps=init_time_steps, incr_time_steps_every=incr_time_steps_every, learn_every=learn_every, learn_iters=learn_iters,
+          final_time_steps=final_time_steps, prng=prng, use_coaching=use_coaching)
 
 #----------------------------------------------------------------------
 
@@ -134,6 +135,8 @@ def train(mgr               : AgentMgr,         # manages all agents and their l
           init_time_steps   : int    = 100,     # max num time steps in the first episode
           final_time_steps  : int    = 500,     # max num time steps ever allowed in an episode
           incr_time_steps_every: int = 1,       # num episodes between increment of max time steps allowed
+          learn_every       : int    = 1,       # number of episodes between learning events
+          learn_iters       : int    = 1,       # number of learning iterations per event
           sleeping          : bool   = False,   # should the code pause for a few sec after selected
                                                 #   episodes? (allows for better visualizing)
           training_goal     : float  = 0.0,     # when avg score (over AVG_SCORE_EXTENT consecutive
@@ -168,6 +171,12 @@ def train(mgr               : AgentMgr,         # manages all agents and their l
     # loop on episodes for training
     start_time = time.perf_counter()
     for ep in range(starting_episode, max_episodes):
+
+        #print("DEBUG - sleeping...")
+        #time.sleep(9)
+
+
+
         
         # Reset the enviroment & agents and get their initial states
         env_info = env.reset(train_mode=True)
@@ -199,7 +208,23 @@ def train(mgr               : AgentMgr,         # manages all agents and their l
                 break
         
         # invoke the learning algorithm on each desired agent
-        mgr.learn()
+        #print("DEBUG - ready to learn...initial policy:")
+        #mgr.print_actor_params(0)
+        #time.sleep(2)
+
+
+
+
+        # store all experiences from the episode and perform learning steps if appropriate
+        mgr.store_discounted_experiences()
+        for it in range(learn_iters):
+            mgr.learn()
+
+            #if it % 500 == 0:
+                #mgr.print_actor_params(it) #DEBUG only
+
+
+
 
         # determine episode duration and estimate remaining time
         current_time = time.perf_counter()

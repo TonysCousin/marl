@@ -31,6 +31,11 @@ MOST_OF_TIME = 0.0
 # experience reward value above which is considered a desirable experience
 REWARD_THRESHOLD = 0.0
 
+# normal distribution when random action values are assigned
+RANDOM_MEAN = 0.0
+RANDOM_SD = 0.04
+
+
 
 
 #------------------------------------------------------------------------------
@@ -76,7 +81,6 @@ class AgentMgr:
                  batch_size     : int = 32,         # number of experiences in a learning batch
                  buffer_size    : int = 100000,     # capacity of the experience replay buffer
                  buffer_prime   : int = 1000,       # number of experiences to be stored in replay buffer before learning begins
-                 learn_every    : int = 1,          # number of time steps between learning activity
                  bad_step_prob  : float = 1.0,      # probability of keeping an experience (after buffer priming) with a low reward
                  use_noise      : bool = False,     # should we inject random noise into actions?
                  noise_init     : float = 1.0,      # initial probability of noise being added if it is turned on
@@ -124,7 +128,6 @@ class AgentMgr:
         # initialize other internal stuff
         self.learning_underway = True #if priming replay buffer, use False here and have step() flip it when buffer is primed
         self.learn_control = 0          #num time steps between learning events
-        self.learn_every = learn_every
         self.prev_act = {}              #holds actions from previous time step; each entry is an agent type tensor
         self.first_time_step = True     #is this the first time step of an episode?
 
@@ -249,9 +252,6 @@ class AgentMgr:
                              ):
 
         act = {}
-        RANDOM_MEAN = 0.0
-        RANDOM_SD = 0.04
-
 
 
         flags = "" #TODO: debug only
@@ -403,34 +403,19 @@ class AgentMgr:
 
     #------------------------------------------------------------------------------
 
-    """Update policy and value parameters using the given batch of experience tuples.
-        Q_targets = r + γ * critic_target(next_state, actor_target(next_state))
-        where:
-            actor_target(state) -> action
-            critic_target(state, action) -> Q-value
-        
-        Each agent type will learn in its own loop. Since all agents of a given type share a NN model, the number
-        of learning iterations can be dependent on the number of agents of that type. An experience tuple will be
-        weighted toward those types with the most individual agents. Therefore, types with few agents may be better
-        trained for multiple iterations at each training step, in order to keep total learning iterations on the
-        models more-or-less even across all NN models.
-
-        CAUTION: assumes it will only be called after step() has been called at least once for a new episode, so
-        that the episode accumulator lists are not empty (intention is to only call this method at the end of
-        an episode).
-
-        Return:  none
+    """Calculate discounted rewards from the previous episode (accumulated by the step() method)
+        and store the new experiences in the replay buffer. Do this for all agents, whether they
+        are learning or not, and whether they are using their policies or not; this way we will have
+        a full experience across all agents to store for those who are learning.
     """
-
-    def learn(self):
-
-        #.........Calculate discounted rewards from the previous episode (accumulated by the step() method)
-        #         and store the new experiences in the replay buffer. Do this for all agents, whether they
-        #         are learning or not, and whether they are using their policies or not; this way we will have
-        #         a full experience across all agents to store for those who are learning.
+    
+    def store_discounted_experiences(self):
 
         # compute the discounted rewards for each time step to the end of the episode
         num_time_steps = len(self.ep_rewards)
+        print("num time steps = ", num_time_steps)
+
+
         discount = self.gamma ** np.arange(num_time_steps) #multipliers to be applied to future time steps
 
         # for each agent pull out its raw rewards then apply the discount factors, sum the future rewards, then
@@ -464,6 +449,29 @@ class AgentMgr:
         self.ep_next_st.clear()
         self.ep_dones.clear()
         self.first_time_step = True
+
+    #------------------------------------------------------------------------------
+
+    """Update policy and value parameters using the given batch of experience tuples.
+        Q_targets = r + γ * critic_target(next_state, actor_target(next_state))
+        where:
+            actor_target(state) -> action
+            critic_target(state, action) -> Q-value
+        
+        Each agent type will learn in its own loop. Since all agents of a given type share a NN model, the number
+        of learning iterations can be dependent on the number of agents of that type. An experience tuple will be
+        weighted toward those types with the most individual agents. Therefore, types with few agents may be better
+        trained for multiple iterations at each training step, in order to keep total learning iterations on the
+        models more-or-less even across all NN models.
+
+        CAUTION: assumes it will only be called after step() has been called at least once for a new episode, so
+        that the episode accumulator lists are not empty (intention is to only call this method at the end of
+        an episode).
+
+        Return:  none
+    """
+
+    def learn(self):
 
         #.........Prepare the learning batch data
 
@@ -514,7 +522,8 @@ class AgentMgr:
                 
                 # else, assign a random action vector to both the target and current actions
                 else:
-                    ta = torch.from_numpy(self.prng.random(self.batch_size * at.action_size)).float().view(self.batch_size, -1)
+                    av_raw = self.prng.normal(RANDOM_MEAN, RANDOM_SD, self.batch_size * at.action_size)
+                    ta = torch.from_numpy(av_raw).float().view(self.batch_size, -1)
                     ca = ta
 
                 if first:
@@ -559,6 +568,10 @@ class AgentMgr:
                         # use the current policy to compute the critic loss for this agent
                         critic_loss = F.mse_loss(q_expected, q_targets) #q_targets was previously detached
 
+
+                        #if t == "StrikerBrain":
+                            #print("critic_loss = ", critic_loss)
+
                         # minimize the loss
                         at.critic_opt.zero_grad()
                         retain = agents_updated < num_agents_being_trained - 1
@@ -581,6 +594,9 @@ class AgentMgr:
 
                     # compute the actor loss
                     actor_loss = -at.critic_policy(states_all, cur_actions).mean()
+
+                    #if t == "StrikerBrain":
+                        #print("actor_loss = ", actor_loss)
 
                     # minimize the loss
                     retain = agents_updated < num_agents_being_trained - 1 #retain graph for all but the final agent
@@ -605,6 +621,68 @@ class AgentMgr:
                     # perform a soft update on the critic & actor target NNs for each agent type
                     self.soft_update(at.critic_policy, at.critic_target)
                     self.soft_update(at.actor_policy, at.actor_target)
+
+    #------------------------------------------------------------------------------
+
+    # TODO: debug only!  Assumes striker actor l1 = 1024 and l2 = 256, critic l1 = 2048 and l2 = 256
+
+    def print_actor_params(self, num):
+        p_iter = self.agent_types['StrikerBrain'].actor_policy.parameters()
+        ps = []
+        for i, p in enumerate(p_iter):
+            if i == 0:
+                ps.append(p[1, 1].item())
+                ps.append(p[214, 112].item())
+                ps.append(p[891, 55].item())
+            elif i == 1:
+                ps.append(p[999].item())
+            elif i == 2:
+                ps.append(p[6, 808].item())
+                ps.append(p[77, 777].item())
+                ps.append(p[200, 201].item())
+            elif i == 3:
+                ps.append(p[51].item())
+            elif i == 4:
+                ps.append(p[1, 120].item())
+                ps.append(p[3, 0].item())
+                ps.append(p[4, 19])
+            elif i == 5:
+                ps.append(p[2].item())
+            else:
+                print("Unknown parameter", i)
+        print("Striker actor {:5d}:".format(num), end="")
+        for i in range(len(ps)):
+            print(" {:10.7f}".format(ps[i]), end="")
+        print("")
+
+    def print_critic_params(self, num):
+        p_iter = self.agent_types['StrikerBrain'].critic_policy.parameters()
+        ps = []
+        for i, p in enumerate(p_iter):
+            if i == 0:
+                ps.append(p[1, 1].item())
+                ps.append(p[214, 112].item())
+                ps.append(p[891, 55].item())
+            elif i == 1:
+                ps.append(p[999].item())
+            elif i == 2:
+                ps.append(p[6, 808].item())
+                ps.append(p[77, 777].item())
+                ps.append(p[200, 201].item())
+            elif i == 3:
+                ps.append(p[51].item())
+            elif i == 4:
+                ps.append(p[0, 120].item())
+                ps.append(p[0, 0].item())
+                ps.append(p[0, 19])
+            elif i == 5:
+                ps.append(p[0].item())
+            else:
+                print("Unknown parameter", i)
+        print("Striker critic {:5d}:".format(num), end="")
+        for i in range(len(ps)):
+            print(" {:10.7f}".format(ps[i]), end="")
+        print("")
 
     #------------------------------------------------------------------------------
 
