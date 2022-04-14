@@ -282,14 +282,15 @@ def train(mgr               : AgentMgr,         # manages all agents and their l
             break
 
         # if this solution is clearly going nowhere, then abort early
+        #TODO: put all this into a callback function provided by the domain project
         if ep % 100 == 0:
             avg_old2 = avg_old1
             avg_old1 = avg_score
         if ep > starting_episode + ABORT_EPISODE  and  mgr.get_noise_level() < 0.01:
             hit_rate = float(mem_stats[1]) / ep
             poor1 = hit_rate < 0.025  or  (rem_time > 2.0  and  ep > starting_episode + 2*ABORT_EPISODE  and   hit_rate < 0.06)
-            diff = 0.2*max(abs(avg_score), abs(avg_old2), abs(avg_old1), abs(training_goal))
-            poor2 = avg_score < avg_old1 - diff  and  avg_old1 < avg_old2 - diff
+
+            poor2 = avg_score < 0.1  and  avg_old1 < 0.1  and  ep > starting_episode + 2*ABORT_EPISODE
             if poor1 or poor2:
                 print("\n* Aborting due to inadequate progress.")
                 print("Final noise level = {:6.4f}".format(mgr.get_noise_level()))

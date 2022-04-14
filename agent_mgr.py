@@ -413,9 +413,6 @@ class AgentMgr:
 
         # compute the discounted rewards for each time step to the end of the episode
         num_time_steps = len(self.ep_rewards)
-        print("num time steps = ", num_time_steps)
-
-
         discount = self.gamma ** np.arange(num_time_steps) #multipliers to be applied to future time steps
 
         # for each agent pull out its raw rewards then apply the discount factors, sum the future rewards, then

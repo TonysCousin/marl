@@ -56,7 +56,7 @@ from random_sampler import RandomSampler
 
 #----------------------------------------------------------------------
 
-NAME                = "DISC08" #next is 8
+NAME                = "Demo" 
 NUM_RUNS            = 8
 CHKPT_EVERY         = 500
 PRIME               = 0     #num random experiences added to the replay buffer before training begins
