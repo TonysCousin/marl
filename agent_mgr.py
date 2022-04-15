@@ -32,6 +32,7 @@ MOST_OF_TIME = 0.75 #0.75 results in WAAAY more than 75% of time with see 468
 REWARD_THRESHOLD = 0.1 #only allows experiences with a goal scored
 
 
+torch.autograd.set_detect_anomaly(True) #help debug runtime error
 
 #------------------------------------------------------------------------------
 
@@ -144,6 +145,8 @@ class AgentMgr:
 
 
         self.erb.store_types(self.agent_types) #TODO: debug only!
+
+        print("\n\n///// Agent manager initialized to run on {}\n\n".format(DEVICE));
 
     #------------------------------------------------------------------------------
 
@@ -396,9 +399,9 @@ class AgentMgr:
                 first = False
 
             else:
-                states_all = torch.cat((states_all, s), dim=1)
-                actions_all = torch.cat((actions_all, a), dim=1)
-                next_states_all = torch.cat((next_states_all, n), dim=1)
+                states_all = torch.cat((states_all, s.to(DEVICE)), dim=1)
+                actions_all = torch.cat((actions_all, a.to(DEVICE)), dim=1)
+                next_states_all = torch.cat((next_states_all, n.to(DEVICE)), dim=1)
 
 
         #.........Use the current actor NNs to get possible action values
@@ -410,11 +413,11 @@ class AgentMgr:
             for agent in range(at.num_agents):
 
                 # grab next state vectors and use this agent's target network to predict next actions
-                ns = next_states[t][:, agent, :]
+                ns = next_states[t][:, agent, :].to(DEVICE)
                 ta = at.actor_target(ns).detach() #vector of all possible actions
 
                 # grab current state vector and use this agent's current policy to decide current actions
-                cs = states[t][:, agent, :]
+                cs = states[t][:, agent, :].to(DEVICE)
                 ca = at.actor_policy(cs).detach() #vector of all possbile actions
 
                 if first:
@@ -449,7 +452,7 @@ class AgentMgr:
                 q_expected = at.critic_policy(states_all, actions_all).squeeze()
 
                 # use the current policy to compute the critic loss for this agent
-                critic_loss = F.mse_loss(q_expected, q_targets) #q_targets was previously detached
+                critic_loss = F.mse_loss(q_expected, q_targets.detach()) #q_targets was previously detached
 
                 # minimize the loss
                 at.critic_opt.zero_grad()
@@ -458,7 +461,7 @@ class AgentMgr:
                 torch.nn.utils.clip_grad_norm_(at.critic_policy.parameters(), 1.0)
                 at.critic_opt.step()
 
-        #.........Update the actor NNs based on learning losses
+        #.........Update the actor NNs based on learning losses 
 
         total_agents_updated = 0 #count per loop instead of enumerate, since each type may have a different number of agents
         for t in self.agent_types:
